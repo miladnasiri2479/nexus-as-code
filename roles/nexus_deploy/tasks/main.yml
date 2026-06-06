@@ -57,14 +57,23 @@
       start_period: 120s  # Nexus takes a while to boot initially
   register: nexus_container_state
 
-- name: Wait until Nexus API is fully ready
+- name: Wait until Nexus API is fully ready (Validation)
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
     method: GET
     status_code: 200
   register: nexus_status
   until: nexus_status.status == 200
-  retries: 30
+  retries: 10
   delay: 15
+  ignore_errors: true
   changed_when: false
-  # This acts as an integration check ensuring Phase 1 completes correctly before Phase 2 starts.
+
+- name: Assert Nexus is running and healthy
+  ansible.builtin.assert:
+    that:
+      - nexus_status is not failed
+      - nexus_status.status == 200
+    fail_msg: "[ERROR] Nexus failed to become ready after 10 attempts. Check Docker logs."
+    success_msg: "[OK] Nexus is running and healthy!"
+    quiet: true
