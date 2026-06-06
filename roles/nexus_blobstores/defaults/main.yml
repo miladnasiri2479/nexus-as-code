@@ -1,27 +1,4 @@
 ---
 # roles/nexus_blobstores/defaults/main.yml
-
-nexus:
-  hostname: "localhost"
-  http_port: 8081
-  admin_user: "admin"
-  admin_password: "ChangeMe123!"
-  data_dir: "/opt/nexus-data"
-
-storage:
-  type: "file" # Valid options: file, s3, minio
-  # bucket: "my-nexus-bucket"
-  # access_key: "AKIA..."
-  # secret_key: "SECRET..."
-  # region: "us-east-1"
-  # endpoint: "https://minio.local"
-
-# Dictionary of blobstores to create. 
-# The type (file/s3/minio) is inherited globally from `storage.type`.
-blobstores:
-  default:
-    enabled: true
-  docker:
-    enabled: true
-  maven:
-    enabled: true
+# All variables are securely managed in group_vars/all.yml
+# Do not store secrets here.

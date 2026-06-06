@@ -1,18 +1,4 @@
 ---
 # roles/nexus_bootstrap/defaults/main.yml
-
-nexus:
-  hostname: "nexus.mycompany.local"
-  http_port: 8081
-  data_dir: "/opt/nexus-data"
-  admin_password: "ChangeMe123!"
-  anonymous_access: false
-  
-  # Base URL to configure in Nexus (optional)
-  base_url: "https://nexus.mycompany.local"
-
-  # Realms to enable
-  active_realms:
-    - "NexusAuthenticatingRealm"
-    - "DockerToken"
-    - "NexusAuthorizingRealm"
+# All variables are securely managed in group_vars/all.yml
+# Do not store secrets here.

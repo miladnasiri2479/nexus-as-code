@@ -1,4 +1,4 @@
 ---
-# roles/storage/defaults/main.yml
+# roles/nexus_cluster/defaults/main.yml
 # All variables are securely managed in group_vars/all.yml
 # Do not store secrets here.

@@ -1,22 +1,4 @@
 ---
 # roles/nexus_repositories/defaults/main.yml
-
-nexus:
-  hostname: "localhost"
-  http_port: 8081
-  admin_user: "admin"
-  admin_password: "ChangeMe123!"
-
-# Example of user input. This will typically be defined in group_vars/all.yml
-repositories:
-  docker_hub:
-    enabled: true
-    blobstore: "docker" # Example of explicit mapping
-  maven_central:
-    enabled: true
-  npm_registry:
-    enabled: false
-  pypi_org:
-    enabled: false
-  helm_charts:
-    enabled: false
+# All variables are securely managed in group_vars/all.yml
+# Do not store secrets here.

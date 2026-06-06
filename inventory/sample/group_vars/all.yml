@@ -4,21 +4,84 @@
 # ==============================================================================
 
 # ==========================================
-# 1. CORE NEXUS SETTINGS
+# 1. CORE NEXUS SETTINGS & CREDENTIALS
 # ==========================================
 nexus:
   hostname: "nexus.mycompany.local"
   version: "3.68.0"
-  admin_password: "SuperSecretPassword123!" # Required: Min 8 chars
+  
+  # Admin Credentials
   admin_user: "admin"
+  admin_password: "SuperSecretPassword123!" # Required: Min 8 chars
+  
+  # External Database Credentials (Used if cluster is enabled)
+  db_url: "jdbc:postgresql://postgres.internal:5432/nexus"
+  db_user: "nexus"
+  db_password: "SecretDatabasePassword"
+
+  # Core runtime values
   http_port: 8081
   data_dir: "/opt/nexus-data"
   network_name: "nexus_network"
   container_name: "nexus"
   anonymous_access: false
+  base_url: "https://nexus.mycompany.local"
+  active_realms:
+    - "NexusAuthenticatingRealm"
+    - "DockerToken"
+    - "NexusAuthorizingRealm"
 
 # ==========================================
-# 2. TRAEFIK (EDGE PROXY)
+# 2. FEATURE FLAGS & MODULE CONFIGURATIONS
+# ==========================================
+features:
+  storage:
+    enabled: true
+  blobstores:
+    enabled: true
+  repositories:
+    enabled: true
+  
+  cluster:
+    enabled: false
+    replicas: 3
+    
+  loadbalancer:
+    enabled: false
+    
+  scaling:
+    enabled: false
+
+  monitoring:
+    enabled: false
+    metrics_enabled: true
+    user: "nexus_monitor"
+    password: "SecureMonitorPassword123!"
+
+  backup:
+    enabled: false
+    schedule: "0 2 * * *"
+    retention_days: 7
+    destination: "local" # local, s3, minio
+    bucket: "nexus-backups"
+    access_key: "BACKUP_AKIA"
+    secret_key: "BACKUP_SECRET"
+    region: "us-east-1"
+    endpoint: "" # Only needed for minio
+
+# ==========================================
+# 3. STORAGE SETTINGS (If external storage used)
+# ==========================================
+storage:
+  type: "file" # local, s3, or minio
+  bucket: "nexus-artifacts"
+  access_key: "STORAGE_AKIA"
+  secret_key: "STORAGE_SECRET"
+  region: "us-east-1"
+  endpoint: ""
+
+# ==========================================
+# 4. TRAEFIK (EDGE PROXY)
 # ==========================================
 traefik:
   enabled: true
@@ -29,49 +92,30 @@ traefik:
   dashboard_enabled: false
   config_dir: "/opt/traefik"
 
-tls:
-  enabled: "{{ traefik.letsencrypt }}"
-  cert_email: "{{ traefik.email }}"
-
 # ==========================================
-# 3. STORAGE & BLOBSTORES
+# 5. BLOBSTORES OVERRIDES
 # ==========================================
-# storage block used by validation role
-storage:
-  type: "file" # local, s3, or minio
-
-# blobstores block used by blobstores role API
 blobstores:
-  - name: "default"
-    type: "file"
-  - name: "docker-blobstore"
-    type: "file"
-  - name: "maven-blobstore"
-    type: "file"
-  
-  # Example S3 integration:
-  # - name: "s3-backup-blob"
-  #   type: "s3"
-  #   bucket: "my-bucket"
-  #   region: "us-east-1"
-  #   access_key: "AKIA..."
-  #   secret_key: "SECRET..."
+  default:
+    enabled: true
+  docker:
+    enabled: true
+  maven:
+    enabled: true
 
 # ==========================================
-# 4. REPOSITORIES CATALOG OVERRIDES
+# 6. REPOSITORIES OVERRIDES
 # ==========================================
-# Enable or disable repos here. They pull logic from roles/repositories/vars/catalog.yml
 repositories:
   docker_hub:
     enabled: true
-    blobstore: "docker-blobstore"
-  
+    blobstore: "docker"
   maven_central:
     enabled: true
-    blobstore: "maven-blobstore"
-  
+    blobstore: "maven"
   npm_registry:
     enabled: false
-  
   pypi_org:
+    enabled: false
+  helm_charts:
     enabled: false
