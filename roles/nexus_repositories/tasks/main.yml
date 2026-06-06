@@ -1,5 +1,5 @@
 ---
-# roles/repositories/tasks/main.yml
+# roles/nexus_repositories/tasks/main.yml
 
 - name: Load Repository Catalog
   ansible.builtin.include_vars:
@@ -23,11 +23,10 @@
   ansible.builtin.set_fact:
     existing_repo_names: "{{ existing_repos_api.json | map(attribute='name') | list }}"
 
-- name: Manage individual repositories
+- name: Manage individual repositories dynamically
   ansible.builtin.include_tasks: manage_repo.yml
   loop: "{{ repositories | dict2items }}"
   loop_control:
     loop_var: repo_item
     label: "{{ repo_item.key }}"
-  # Only process if 'enabled' is set to true
-  when: repo_item.value.enabled | default(false) | bool
+  # Removed the 'when: enabled' check here so we can process Deletions inside manage_repo.yml

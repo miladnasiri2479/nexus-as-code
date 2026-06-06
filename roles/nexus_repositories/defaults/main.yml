@@ -1,5 +1,5 @@
 ---
-# roles/repositories/defaults/main.yml
+# roles/nexus_repositories/defaults/main.yml
 
 nexus:
   hostname: "localhost"
@@ -10,6 +10,13 @@ nexus:
 # Example of user input. This will typically be defined in group_vars/all.yml
 repositories:
   docker_hub:
-    enabled: false
+    enabled: true
+    blobstore: "docker" # Example of explicit mapping
   maven_central:
+    enabled: true
+  npm_registry:
+    enabled: false
+  pypi_org:
+    enabled: false
+  helm_charts:
     enabled: false

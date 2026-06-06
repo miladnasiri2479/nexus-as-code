@@ -1,16 +1,17 @@
 ---
-# roles/repositories/tasks/manage_repo.yml
+# roles/nexus_repositories/tasks/manage_repo.yml
 
 - name: Check if repository exists in catalog
   ansible.builtin.assert:
     that:
       - loaded_catalog.repo_catalog[repo_item.key] is defined
-    fail_msg: "[ERROR] Repository key '{{ repo_item.key }}' is enabled but not found in vars/catalog.yml"
+    fail_msg: "[ERROR] Repository key '{{ repo_item.key }}' is not found in vars/catalog.yml"
     quiet: true
 
-- name: Load catalog definition for current repo
+- name: Load catalog definition and resolve variables
   ansible.builtin.set_fact:
     catalog_def: "{{ loaded_catalog.repo_catalog[repo_item.key] }}"
+    is_enabled: "{{ repo_item.value.enabled | default(false) | bool }}"
 
 - name: Prepare Final Payload (Merge User Overrides)
   ansible.builtin.set_fact:
@@ -23,7 +24,21 @@
         }, recursive=True)
       }}
 
-- name: Create Repository (If Missing)
+- name: Delete Repository (If Disabled & Exists)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/repositories/{{ catalog_def.format }}/{{ catalog_def.type }}/{{ final_payload.name }}"
+    method: DELETE
+    user: "{{ nexus.admin_user | default('admin') }}"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    status_code: 204
+  when: 
+    - not is_enabled
+    - final_payload.name in existing_repo_names
+  no_log: true
+  changed_when: true
+
+- name: Create Repository (If Enabled & Missing)
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/repositories/{{ catalog_def.format }}/{{ catalog_def.type }}"
     method: POST
@@ -33,10 +48,13 @@
     body_format: json
     body: "{{ final_payload }}"
     status_code: 201
-  when: final_payload.name not in existing_repo_names
+  when: 
+    - is_enabled
+    - final_payload.name not in existing_repo_names
   no_log: true
+  changed_when: true
 
-- name: Update Repository (If Exists)
+- name: Update Repository (If Enabled & Exists)
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/repositories/{{ catalog_def.format }}/{{ catalog_def.type }}/{{ final_payload.name }}"
     method: PUT
@@ -46,6 +64,8 @@
     body_format: json
     body: "{{ final_payload }}"
     status_code: 204
-  when: final_payload.name in existing_repo_names
+  when: 
+    - is_enabled
+    - final_payload.name in existing_repo_names
   no_log: true
   changed_when: true
