@@ -8,6 +8,7 @@
       - python3-docker
     state: present
     update_cache: true
+    cache_valid_time: 3600
   when: ansible_os_family == 'Debian'
 
 - name: Install Docker and dependencies (RedHat/CentOS)
@@ -56,6 +57,7 @@
       retries: 5
       start_period: 120s  # Nexus takes a while to boot initially
   register: nexus_container_state
+  notify: Restart Nexus Container
 
 - name: Wait until Nexus API is fully ready (Validation)
   ansible.builtin.uri:

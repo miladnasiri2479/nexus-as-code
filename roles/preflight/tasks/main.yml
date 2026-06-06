@@ -12,13 +12,22 @@
     fail_msg: "[ERROR] Docker daemon is not installed or not running. Please install Docker before proceeding."
     success_msg: "[OK] Docker is installed and running."
     quiet: true
+  ignore_errors: true
+  register: docker_check
 
-- name: Check if required ports are available
+- name: Set Docker installation fact
+  ansible.builtin.set_fact:
+    docker_is_running: "{{ docker_check is not failed }}"
+
+# If Docker is already running, the ports might be legitimately used by our own previous Nexus/Traefik containers.
+# We only do a hard fail on ports if this is a pristine environment (Docker not running).
+# Container port conflicts will be natively and deterministically caught by docker_container module later.
+- name: Check if required ports are available (Pristine Check)
   ansible.builtin.wait_for:
     port: "{{ item }}"
     state: stopped
     timeout: 3
-    msg: "[ERROR] Port {{ item }} is already in use. Please free up this port."
+    msg: "[ERROR] Port {{ item }} is already in use by a non-docker process."
   loop:
     - "{{ preflight.nexus_port }}"
     - "{{ preflight.traefik_http_port }}"
@@ -26,6 +35,7 @@
   ignore_errors: true
   register: port_check
   no_log: true
+  when: not docker_is_running
 
 - name: Assert port availability
   ansible.builtin.assert:
@@ -34,6 +44,7 @@
     fail_msg: "[ERROR] One or more required ports ({{ preflight.nexus_port }}, {{ preflight.traefik_http_port }}, {{ preflight.traefik_https_port }}) are already in use."
     success_msg: "[OK] All required ports are free."
     quiet: true
+  when: not docker_is_running
 
 - name: Get directory stats for data path
   ansible.builtin.stat:
@@ -62,6 +73,3 @@
   when: >
     (preflight.nexus_data_path | dirname) | regex_search('^' ~ item.mount)
     and (item.mount == '/' or (preflight.nexus_data_path | dirname) != '/')
-  # We find the mount point that matches the data path to check its specific free space
-  # This regex logic finds the most specific mount point for the given path.
-  # For a simple robust check, we assert space on the mount containing the data dir.
