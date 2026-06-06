@@ -1,0 +1,68 @@
+---
+# roles/backup/tasks/main.yml
+
+- name: Assert backup feature is enabled
+  ansible.builtin.assert:
+    that:
+      - features.backup.enabled | default(false) | bool
+    fail_msg: "[ERROR] The backup role was called, but features.backup.enabled is not true."
+    quiet: true
+
+- name: Ensure backup local archive directory exists
+  ansible.builtin.file:
+    path: "/var/backups/nexus"
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+
+- name: Install AWS CLI for S3/MinIO backups (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: awscli
+    state: present
+  when: 
+    - features.backup.destination in ['s3', 'minio']
+    - ansible_os_family == 'Debian'
+
+- name: Install AWS CLI for S3/MinIO backups (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name: awscli
+    state: present
+  when: 
+    - features.backup.destination in ['s3', 'minio']
+    - ansible_os_family == 'RedHat'
+
+- name: Template Nexus Backup Script
+  ansible.builtin.template:
+    src: nexus-backup.sh.j2
+    dest: "/usr/local/bin/nexus-backup.sh"
+    mode: '0700'
+    owner: root
+    group: root
+
+- name: Configure Backup Cron Job
+  ansible.builtin.cron:
+    name: "Nexus Automated Backup"
+    job: "/usr/local/bin/nexus-backup.sh >> /var/log/nexus-backup.log 2>&1"
+    minute: "{{ features.backup.schedule.split(' ')[0] }}"
+    hour: "{{ features.backup.schedule.split(' ')[1] }}"
+    day: "{{ features.backup.schedule.split(' ')[2] }}"
+    month: "{{ features.backup.schedule.split(' ')[3] }}"
+    weekday: "{{ features.backup.schedule.split(' ')[4] }}"
+    state: present
+
+- name: Execute manual backup if requested
+  ansible.builtin.command: "/usr/local/bin/nexus-backup.sh"
+  when: run_backup_now | default(false) | bool
+  changed_when: true
+  register: manual_backup_result
+
+- name: Display manual backup result
+  ansible.builtin.debug:
+    var: manual_backup_result.stdout_lines
+  when: run_backup_now | default(false) | bool
+
+# Conditional inclusion of restore logic
+- name: Run restore process if requested
+  ansible.builtin.include_tasks: restore.yml
+  when: restore_backup_file | default('') != ''

@@ -1,0 +1,66 @@
+---
+# roles/backup/tasks/restore.yml
+
+- name: Assert restore file is defined
+  ansible.builtin.assert:
+    that:
+      - restore_backup_file != ""
+    fail_msg: "[ERROR] restore_backup_file must be set to a valid filename to execute a restore."
+    quiet: true
+
+- name: Ensure Nexus container is stopped before restore
+  community.docker.docker_container:
+    name: "{{ nexus.container_name | default('nexus') }}"
+    state: stopped
+
+- name: Download backup from S3/MinIO if external storage is used
+  ansible.builtin.command: >
+    aws s3 cp s3://{{ features.backup.bucket }}/{{ restore_backup_file }} /var/backups/nexus/{{ restore_backup_file }}
+    {% if features.backup.destination == 'minio' %}--endpoint-url {{ features.backup.endpoint }}{% endif %}
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ features.backup.access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ features.backup.secret_key }}"
+    AWS_DEFAULT_REGION: "{{ features.backup.region | default('us-east-1') }}"
+  when: features.backup.destination in ['s3', 'minio']
+  args:
+    creates: "/var/backups/nexus/{{ restore_backup_file }}"
+  no_log: true
+
+- name: Verify backup file exists locally
+  ansible.builtin.stat:
+    path: "/var/backups/nexus/{{ restore_backup_file }}"
+  register: backup_file_stat
+
+- name: Fail if backup file is missing
+  ansible.builtin.assert:
+    that:
+      - backup_file_stat.stat.exists
+    fail_msg: "[ERROR] Backup file /var/backups/nexus/{{ restore_backup_file }} not found!"
+    quiet: true
+
+- name: Clean existing Nexus data directory to prevent corruption
+  ansible.builtin.file:
+    path: "{{ nexus.data_dir }}/"
+    state: absent
+  # Careful: this is destructive, but necessary for a clean restore.
+  
+- name: Recreate Nexus data directory
+  ansible.builtin.file:
+    path: "{{ nexus.data_dir }}"
+    state: directory
+    owner: "200"
+    group: "200"
+    mode: '0755'
+
+- name: Extract backup into Nexus data directory
+  ansible.builtin.unarchive:
+    src: "/var/backups/nexus/{{ restore_backup_file }}"
+    dest: "{{ nexus.data_dir | dirname }}" # Extracts into /opt (creates nexus-data)
+    remote_src: yes
+    owner: "200"
+    group: "200"
+
+- name: Start Nexus container after restore
+  community.docker.docker_container:
+    name: "{{ nexus.container_name | default('nexus') }}"
+    state: started

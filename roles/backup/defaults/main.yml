@@ -1,0 +1,24 @@
+---
+# roles/backup/defaults/main.yml
+
+features:
+  backup:
+    enabled: false
+    schedule: "0 2 * * *" # Daily at 2 AM
+    retention_days: 7
+    destination: "local" # local, s3, minio
+    
+    # Required if destination is s3 or minio
+    bucket: ""
+    access_key: ""
+    secret_key: ""
+    region: "us-east-1"
+    endpoint: "" # Required for minio
+
+nexus:
+  data_dir: "/opt/nexus-data"
+  container_name: "nexus"
+
+# Control variables for execution
+run_backup_now: false
+restore_backup_file: "" # Set this to a filename to trigger restore (e.g., nexus-backup-20231027.tar.gz)
