@@ -57,18 +57,17 @@
       tags: ['repos', 'repositories']
 
 # ------------------------------------------------------------------------------
-# Future Extension Points (Phase 4)
-# These will be enabled once the respective roles are fully integrated.
+# Phase 4 - Edge Routing & Hardening
 # ------------------------------------------------------------------------------
-#
-# - name: Phase 4 - Edge Routing & Add-ons
-#   hosts: nexus_servers
-#   become: true
-#   gather_facts: false
-#   roles:
-#     - role: traefik
-#       tags: ['proxy', 'traefik']
-#     - role: backup
-#       tags: ['backup']
-#     - role: monitoring
-#       tags: ['monitoring']
+
+- name: Phase 4 - Edge Routing & Hardening
+  hosts: nexus_servers
+  become: true
+  gather_facts: false
+  roles:
+    - role: traefik
+      when: traefik is defined and (traefik.enabled | default(false) | bool)
+      tags: ['proxy', 'traefik']
+      
+    - role: security_hardening
+      tags: ['security', 'hardening']
