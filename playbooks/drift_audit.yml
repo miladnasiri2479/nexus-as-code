@@ -1,0 +1,126 @@
+---
+# playbooks/drift_audit.yml
+# ==============================================================================
+# NEXUS AS CODE - DRIFT DETECTION AUDIT
+# ==============================================================================
+# This playbook reads the Nexus REST API and compares it against group_vars/all.yml.
+# It DOES NOT make any changes. It outputs a report of drifted resources.
+
+- name: Configuration Drift Audit
+  hosts: nexus_servers
+  gather_facts: false
+  become: false
+  vars:
+    drift_report: []
+
+  tasks:
+    - name: Fetch Actual Anonymous Access State
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/anonymous"
+        method: GET
+        user: "{{ nexus.admin_user }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: actual_anon
+      no_log: true
+
+    - name: Detect Drift - Anonymous Access
+      ansible.builtin.set_fact:
+        drift_report: "{{ drift_report + [{
+          'resource': 'Security: Anonymous Access',
+          'desired': nexus.anonymous_access | default(false),
+          'actual': actual_anon.json.enabled,
+          'severity': 'CRITICAL',
+          'remediation': 'Run configure playbook (Phase 2) to secure the instance.'
+        }] }}"
+      when: actual_anon.json.enabled != nexus.anonymous_access | default(false)
+
+    - name: Fetch Actual Security Realms
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/realms/active"
+        method: GET
+        user: "{{ nexus.admin_user }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: actual_realms
+      no_log: true
+
+    - name: Detect Drift - Security Realms
+      ansible.builtin.set_fact:
+        drift_report: "{{ drift_report + [{
+          'resource': 'Security: Realms (Missing ' ~ item ~ ')',
+          'desired': 'Present',
+          'actual': 'Missing',
+          'severity': 'HIGH',
+          'remediation': 'Run configure playbook (Phase 2) to restore required authentication realms.'
+        }] }}"
+      loop: "{{ nexus.active_realms }}"
+      when: item not in actual_realms.json
+
+    - name: Fetch Actual Repositories
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/repositories"
+        method: GET
+        user: "{{ nexus.admin_user }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: actual_repos_api
+      no_log: true
+
+    - name: Set Actual Repos Fact
+      ansible.builtin.set_fact:
+        actual_repo_names: "{{ actual_repos_api.json | map(attribute='name') | list }}"
+
+    - name: Load Repository Catalog for comparison
+      ansible.builtin.include_vars:
+        file: ../roles/nexus_repositories/vars/catalog.yml
+        name: loaded_catalog
+
+    - name: Detect Drift - Missing Repositories
+      ansible.builtin.set_fact:
+        drift_report: "{{ drift_report + [{
+          'resource': 'Repository: ' ~ loaded_catalog.repo_catalog[item.key].api_payload.name,
+          'desired': 'Present',
+          'actual': 'Missing',
+          'severity': 'MEDIUM',
+          'remediation': 'Run configure playbook (Phase 3) to provision missing repositories.'
+        }] }}"
+      loop: "{{ repositories | dict2items }}"
+      when: 
+        - item.value.enabled | default(false) | bool
+        - loaded_catalog.repo_catalog[item.key] is defined
+        - loaded_catalog.repo_catalog[item.key].api_payload.name not in actual_repo_names
+
+    - name: Detect Drift - Orphaned Repositories (Should be deleted)
+      ansible.builtin.set_fact:
+        drift_report: "{{ drift_report + [{
+          'resource': 'Repository: ' ~ loaded_catalog.repo_catalog[item.key].api_payload.name,
+          'desired': 'Absent',
+          'actual': 'Present',
+          'severity': 'LOW',
+          'remediation': 'Run configure playbook (Phase 3) to clean up orphaned repositories.'
+        }] }}"
+      loop: "{{ repositories | dict2items }}"
+      when: 
+        - not (item.value.enabled | default(false) | bool)
+        - loaded_catalog.repo_catalog[item.key] is defined
+        - loaded_catalog.repo_catalog[item.key].api_payload.name in actual_repo_names
+
+    - name: Print Drift Detection Report
+      ansible.builtin.debug:
+        msg: |
+          ==================================================
+          DRIFT DETECTION REPORT
+          ==================================================
+          Total drifted resources detected: {{ drift_report | length }}
+          
+          {{ drift_report | to_nice_yaml }}
+      when: drift_report | length > 0
+
+    - name: Print Clean Bill of Health
+      ansible.builtin.debug:
+        msg: "[OK] No configuration drift detected. Actual state matches all.yml perfectly."
+      when: drift_report | length == 0
