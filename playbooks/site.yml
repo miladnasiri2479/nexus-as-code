@@ -27,20 +27,22 @@
       tags: ['nexus', 'deploy']
 
 # ------------------------------------------------------------------------------
-# Future Extension Points (Phase 2 & 3)
-# These will be enabled once the respective roles (bootstrap, blobstores) 
-# are implemented and strictly tested.
+# Phase 2 - API Configuration
 # ------------------------------------------------------------------------------
-#
-# - name: Phase 2 - API Configuration & Edge Routing
-#   hosts: nexus_servers
-#   become: false
-#   gather_facts: false
-#   roles:
-#     - role: traefik
-#       tags: ['proxy', 'traefik']
-#     - role: nexus_bootstrap
-#       tags: ['api', 'bootstrap']
+
+- name: Phase 2 - API Configuration & Security
+  hosts: nexus_servers
+  become: false  # API calls run from localhost to Nexus port, root not strictly required
+  gather_facts: false
+  roles:
+    - role: nexus_bootstrap
+      tags: ['api', 'bootstrap', 'security']
+
+# ------------------------------------------------------------------------------
+# Future Extension Points (Phase 3)
+# These will be enabled once the respective roles (blobstores, repositories) 
+# are tested and validated.
+# ------------------------------------------------------------------------------
 #
 # - name: Phase 3 - Storage & Repositories
 #   hosts: nexus_servers

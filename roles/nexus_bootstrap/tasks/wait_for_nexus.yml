@@ -1,0 +1,23 @@
+---
+# roles/nexus_bootstrap/tasks/wait_for_nexus.yml
+
+- name: Poll Nexus API status endpoint
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: nexus_status
+  until: nexus_status.status == 200
+  retries: 30
+  delay: 5
+  ignore_errors: true
+  changed_when: false
+
+- name: Assert Nexus API is ready
+  ansible.builtin.assert:
+    that:
+      - nexus_status is not failed
+      - nexus_status.status == 200
+    fail_msg: "[ERROR] Nexus API did not become ready after 30 attempts (150 seconds). Check Nexus logs."
+    success_msg: "[OK] Nexus API is ready to accept requests."
+    quiet: true

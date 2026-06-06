@@ -2,16 +2,8 @@
 # roles/nexus_bootstrap/tasks/main.yml
 
 # 1. Wait for Nexus API readiness
-- name: Wait for Nexus API to be accessible
-  ansible.builtin.uri:
-    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
-    method: GET
-    status_code: 200
-  register: nexus_status
-  until: nexus_status.status == 200
-  retries: 30
-  delay: 15
-  changed_when: false
+- name: Include reusable Nexus API wait task
+  ansible.builtin.include_tasks: wait_for_nexus.yml
 
 # Check if auth has already been changed to target password
 - name: Check if admin password is already configured
