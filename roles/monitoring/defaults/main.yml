@@ -1,0 +1,14 @@
+---
+# roles/monitoring/defaults/main.yml
+
+features:
+  monitoring:
+    enabled: false
+    metrics_enabled: true
+    user: "monitor"
+    password: "MonitorPassword123!"
+
+nexus:
+  http_port: 8081
+  admin_user: "admin"
+  admin_password: "ChangeMe123!"

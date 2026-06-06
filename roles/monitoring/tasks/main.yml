@@ -1,0 +1,118 @@
+---
+# roles/monitoring/tasks/main.yml
+
+- name: Assert monitoring feature is enabled
+  ansible.builtin.assert:
+    that:
+      - features.monitoring.enabled | default(false) | bool
+    fail_msg: "[ERROR] The monitoring role was called, but features.monitoring.enabled is not true."
+    quiet: true
+
+- name: Perform Basic System Health Check
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: health_check
+  changed_when: false
+  no_log: true
+
+- name: Display System Health Status
+  ansible.builtin.debug:
+    msg: "[OK] Nexus Base System Health Check Passed."
+
+# Configure read-only monitoring user for Prometheus metrics if requested.
+# We avoid heavy observability stacks (no grafana/prometheus containers).
+# Instead, we just expose the endpoint securely using a least-privilege role.
+- name: Configure Metrics Endpoint User & Role
+  when: features.monitoring.metrics_enabled | default(true) | bool
+  block:
+    - name: Set Monitoring Role Payload
+      ansible.builtin.set_fact:
+        monitoring_role_payload:
+          id: "nexus-monitor"
+          name: "Nexus Monitoring Role"
+          description: "Read-only access to metrics and health endpoints"
+          privileges:
+            - "nx-metrics-all"
+            - "nx-healthcheck-read"
+          roles: []
+
+    - name: Check if monitoring role exists
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/roles/nexus-monitor"
+        method: GET
+        user: "{{ nexus.admin_user | default('admin') }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        status_code: [200, 404]
+      register: role_check_api
+      changed_when: false
+      no_log: true
+
+    - name: Create Monitoring Role
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/roles"
+        method: POST
+        user: "{{ nexus.admin_user | default('admin') }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        body_format: json
+        body: "{{ monitoring_role_payload }}"
+        status_code: 200
+      when: role_check_api.status == 404
+      no_log: true
+
+    - name: Set Monitoring User Payload
+      ansible.builtin.set_fact:
+        monitoring_user_payload:
+          userId: "{{ features.monitoring.user }}"
+          firstName: "Nexus"
+          lastName: "Monitor"
+          emailAddress: "{{ features.monitoring.user }}@localhost"
+          password: "{{ features.monitoring.password }}"
+          status: "active"
+          roles:
+            - "nexus-monitor"
+
+    - name: Check if monitoring user exists
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/users?userId={{ features.monitoring.user }}"
+        method: GET
+        user: "{{ nexus.admin_user | default('admin') }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        status_code: [200, 403, 404]
+      register: user_check_api
+      changed_when: false
+      no_log: true
+
+    - name: Create Monitoring User
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/users"
+        method: POST
+        user: "{{ nexus.admin_user | default('admin') }}"
+        password: "{{ nexus.admin_password }}"
+        force_basic_auth: true
+        body_format: json
+        body: "{{ monitoring_user_payload }}"
+        status_code: 200
+      # The API returns a list, if the list is empty, the user doesn't exist
+      when: user_check_api.json | default([]) | length == 0
+      no_log: true
+
+    - name: Validate Monitoring Endpoint Access
+      ansible.builtin.uri:
+        url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status/prometheus"
+        method: GET
+        user: "{{ features.monitoring.user }}"
+        password: "{{ features.monitoring.password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: metrics_validation
+      changed_when: false
+      no_log: true
+
+    - name: Display Metrics Endpoint Info
+      ansible.builtin.debug:
+        msg: "[OK] Prometheus metrics exposed securely. Target: /service/rest/v1/status/prometheus"
