@@ -27,7 +27,7 @@
       tags: ['nexus', 'deploy']
 
 # ------------------------------------------------------------------------------
-# Phase 2 - API Configuration
+# Phase 2 - API Configuration & Security
 # ------------------------------------------------------------------------------
 
 - name: Phase 2 - API Configuration & Security
@@ -39,17 +39,36 @@
       tags: ['api', 'bootstrap', 'security']
 
 # ------------------------------------------------------------------------------
-# Future Extension Points (Phase 3)
-# These will be enabled once the respective roles (blobstores, repositories) 
-# are tested and validated.
+# Phase 3 - Storage & Repositories
+# ------------------------------------------------------------------------------
+
+- name: Phase 3 - Storage & Repositories
+  hosts: nexus_servers
+  become: false
+  gather_facts: false
+  roles:
+    - role: storage
+      tags: ['storage', 'validate']
+      
+    - role: nexus_blobstores
+      tags: ['storage', 'blobstores']
+      
+    - role: nexus_repositories
+      tags: ['repos', 'repositories']
+
+# ------------------------------------------------------------------------------
+# Future Extension Points (Phase 4)
+# These will be enabled once the respective roles are fully integrated.
 # ------------------------------------------------------------------------------
 #
-# - name: Phase 3 - Storage & Repositories
+# - name: Phase 4 - Edge Routing & Add-ons
 #   hosts: nexus_servers
-#   become: false
+#   become: true
 #   gather_facts: false
 #   roles:
-#     - role: nexus_blobstores
-#       tags: ['storage', 'blobstores']
-#     - role: nexus_repositories
-#       tags: ['repos', 'repositories']
+#     - role: traefik
+#       tags: ['proxy', 'traefik']
+#     - role: backup
+#       tags: ['backup']
+#     - role: monitoring
+#       tags: ['monitoring']
