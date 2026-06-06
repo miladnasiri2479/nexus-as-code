@@ -1,3 +1,53 @@
 ---
-- import_playbook: install.yml
-- import_playbook: configure.yml
+# playbooks/site.yml
+# ==============================================================================
+# NEXUS AS CODE - MAIN ENTRYPOINT
+# ==============================================================================
+# This playbook orchestrates the deployment and configuration of Sonatype Nexus.
+# Execution order strictly follows the System Contract DAG.
+
+- name: Phase 1 - Infrastructure Provisioning
+  hosts: nexus_servers
+  become: true
+  gather_facts: true
+  
+  pre_tasks:
+    - name: Verify Supported OS Family
+      ansible.builtin.assert:
+        that: ansible_os_family in ['Debian', 'RedHat']
+        msg: "Unsupported OS. Only Debian and RedHat families are supported."
+        quiet: true
+      tags: ['always']
+
+  roles:
+    - role: preflight
+      tags: ['preflight', 'validate']
+    
+    - role: nexus_deploy
+      tags: ['nexus', 'deploy']
+
+# ------------------------------------------------------------------------------
+# Future Extension Points (Phase 2 & 3)
+# These will be enabled once the respective roles (bootstrap, blobstores) 
+# are implemented and strictly tested.
+# ------------------------------------------------------------------------------
+#
+# - name: Phase 2 - API Configuration & Edge Routing
+#   hosts: nexus_servers
+#   become: false
+#   gather_facts: false
+#   roles:
+#     - role: traefik
+#       tags: ['proxy', 'traefik']
+#     - role: nexus_bootstrap
+#       tags: ['api', 'bootstrap']
+#
+# - name: Phase 3 - Storage & Repositories
+#   hosts: nexus_servers
+#   become: false
+#   gather_facts: false
+#   roles:
+#     - role: nexus_blobstores
+#       tags: ['storage', 'blobstores']
+#     - role: nexus_repositories
+#       tags: ['repos', 'repositories']
