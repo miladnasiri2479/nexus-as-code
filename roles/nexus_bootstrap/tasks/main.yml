@@ -1,0 +1,107 @@
+---
+# roles/nexus_bootstrap/tasks/main.yml
+
+- name: Wait for Nexus API to be accessible
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: nexus_status
+  until: nexus_status.status == 200
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Check if admin password is already changed
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/users?userId=admin"
+    method: GET
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 401, 403]
+  register: admin_auth_check
+  changed_when: false
+  no_log: true
+
+- name: Read initial admin password from file
+  ansible.builtin.slurp:
+    src: "{{ nexus.data_dir | default('/opt/nexus-data') }}/admin.password"
+  register: initial_password_file
+  when: admin_auth_check.status in [401, 403]
+  ignore_errors: true
+
+- name: Set initial password fact
+  ansible.builtin.set_fact:
+    initial_password: "{{ initial_password_file['content'] | b64decode | trim }}"
+  when: admin_auth_check.status in [401, 403] and not initial_password_file.failed
+  no_log: true
+
+- name: Change admin password
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/users/admin/change-password"
+    method: PUT
+    user: "admin"
+    password: "{{ initial_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: "text/plain"
+      accept: "application/json"
+    body: "{{ nexus.admin_password }}"
+    body_format: raw
+    status_code: 204
+  when: admin_auth_check.status in [401, 403] and initial_password is defined
+  no_log: true
+
+- name: Get current anonymous access state
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/anonymous"
+    method: GET
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+  register: anonymous_state
+  changed_when: false
+  no_log: true
+
+- name: Update anonymous access
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/anonymous"
+    method: PUT
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    body_format: json
+    body:
+      enabled: "{{ nexus.anonymous_access | default(false) }}"
+      userId: "anonymous"
+      realmName: "NexusAuthorizingRealm"
+    status_code: 200
+  when: anonymous_state.json.enabled != nexus.anonymous_access | default(false)
+  no_log: true
+
+- name: Get current active security realms
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/realms/active"
+    method: GET
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+  register: active_realms
+  changed_when: false
+  no_log: true
+
+- name: Enable Docker Bearer Token Realm
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/realms/active"
+    method: PUT
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    body_format: json
+    body: "{{ active_realms.json + ['DockerToken'] }}"
+    status_code: 204
+  when: "'DockerToken' not in active_realms.json"
+  no_log: true

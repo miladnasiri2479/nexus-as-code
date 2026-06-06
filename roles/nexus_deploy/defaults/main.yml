@@ -1,0 +1,8 @@
+---
+# roles/nexus/defaults/main.yml
+
+nexus:
+  version: "3.68.0"
+  data_dir: "/opt/nexus-data"
+  http_port: 8081
+  network_name: "nexus_network"

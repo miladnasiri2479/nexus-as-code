@@ -1,0 +1,22 @@
+---
+# roles/blobstores/defaults/main.yml
+
+nexus:
+  hostname: "localhost"
+  http_port: 8081
+  admin_user: "admin"
+  admin_password: "ChangeMe123!"
+
+blobstores: []
+# Example usage:
+# blobstores:
+#   - name: "my-file-blob"
+#     type: "file"
+#     path: "/nexus-data/my-file-blob"
+#   - name: "my-s3-blob"
+#     type: "s3"
+#     bucket: "my-bucket"
+#     region: "us-east-1"
+#     access_key: "AKIA..."
+#     secret_key: "SECRET..."
+#     endpoint: "https://minio.local" # Optional for MinIO

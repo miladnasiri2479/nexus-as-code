@@ -1,0 +1,307 @@
+---
+# ==============================================================================
+# NEXUS AS CODE - REPOSITORY CATALOG
+# ==============================================================================
+# This catalog defines the structure and API payloads for creating various
+# repository formats in Sonatype Nexus via the REST API.
+# Endpoint: POST /service/rest/v1/repositories/{format}/{type}
+# ==============================================================================
+
+cleanup_policies:
+  - name: "remove-unused-30d"
+    notes: "Removes artifacts not downloaded in 30 days"
+  - name: "keep-last-5-releases"
+    notes: "Keeps only the 5 most recent releases per component"
+
+repositories:
+
+  # ---------------------------------------------------------
+  # 1. DOCKER
+  # ---------------------------------------------------------
+  - name: "docker-proxy-hub"
+    format: "docker"
+    type: "proxy"
+    api_payload:
+      name: "docker-proxy-hub"
+      online: true
+      storage:
+        blobStoreName: "docker-blobstore"
+        strictContentTypeValidation: true
+      cleanup:
+        policyNames: ["remove-unused-30d"]
+      proxy:
+        remoteUrl: "https://registry-1.docker.io"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+      docker:
+        v1Enabled: false
+        forceBasicAuth: true
+      dockerProxy:
+        indexType: "REGISTRY"
+
+  - name: "docker-proxy-quay"
+    format: "docker"
+    type: "proxy"
+    api_payload:
+      name: "docker-proxy-quay"
+      online: true
+      storage:
+        blobStoreName: "docker-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://quay.io"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+      docker:
+        v1Enabled: false
+        forceBasicAuth: true
+      dockerProxy:
+        indexType: "REGISTRY"
+
+  - name: "docker-proxy-k8s"
+    format: "docker"
+    type: "proxy"
+    api_payload:
+      name: "docker-proxy-k8s"
+      online: true
+      storage:
+        blobStoreName: "docker-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://registry.k8s.io"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+      docker:
+        v1Enabled: false
+        forceBasicAuth: true
+      dockerProxy:
+        indexType: "REGISTRY"
+
+  # ---------------------------------------------------------
+  # 2. MAVEN (Java)
+  # ---------------------------------------------------------
+  - name: "maven-proxy-central"
+    format: "maven2"
+    type: "proxy"
+    api_payload:
+      name: "maven-proxy-central"
+      online: true
+      storage:
+        blobStoreName: "maven-blobstore"
+        strictContentTypeValidation: true
+      cleanup:
+        policyNames: ["remove-unused-30d"]
+      proxy:
+        remoteUrl: "https://repo1.maven.org/maven2/"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+      maven:
+        versionPolicy: "RELEASE"
+        layoutPolicy: "PERMISSIVE"
+
+  # ---------------------------------------------------------
+  # 3. NPM (Node.js)
+  # ---------------------------------------------------------
+  - name: "npm-proxy-registry"
+    format: "npm"
+    type: "proxy"
+    api_payload:
+      name: "npm-proxy-registry"
+      online: true
+      storage:
+        blobStoreName: "npm-blobstore"
+        strictContentTypeValidation: true
+      cleanup:
+        policyNames: ["remove-unused-30d"]
+      proxy:
+        remoteUrl: "https://registry.npmjs.org/"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 4. PyPI (Python)
+  # ---------------------------------------------------------
+  - name: "pypi-proxy-org"
+    format: "pypi"
+    type: "proxy"
+    api_payload:
+      name: "pypi-proxy-org"
+      online: true
+      storage:
+        blobStoreName: "pypi-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://pypi.org/"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 5. NuGet (.NET)
+  # ---------------------------------------------------------
+  - name: "nuget-proxy-org"
+    format: "nuget"
+    type: "proxy"
+    api_payload:
+      name: "nuget-proxy-org"
+      online: true
+      storage:
+        blobStoreName: "nuget-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://api.nuget.org/v3/index.json"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+      nugetProxy:
+        queryCacheItemMaxAge: 3600
+
+  # ---------------------------------------------------------
+  # 6. Helm (Kubernetes Charts)
+  # ---------------------------------------------------------
+  - name: "helm-proxy-bitnami"
+    format: "helm"
+    type: "proxy"
+    api_payload:
+      name: "helm-proxy-bitnami"
+      online: true
+      storage:
+        blobStoreName: "helm-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://charts.bitnami.com/bitnami"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 7. RubyGems (Ruby)
+  # ---------------------------------------------------------
+  - name: "rubygems-proxy-org"
+    format: "rubygems"
+    type: "proxy"
+    api_payload:
+      name: "rubygems-proxy-org"
+      online: true
+      storage:
+        blobStoreName: "rubygems-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://rubygems.org"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 8. Yum (RPM / CentOS / RHEL)
+  # ---------------------------------------------------------
+  - name: "yum-proxy-centos"
+    format: "yum"
+    type: "proxy"
+    api_payload:
+      name: "yum-proxy-centos"
+      online: true
+      storage:
+        blobStoreName: "yum-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "http://mirror.centos.org/centos/"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 9. Apt (Debian / Ubuntu)
+  # ---------------------------------------------------------
+  - name: "apt-proxy-ubuntu"
+    format: "apt"
+    type: "proxy"
+    api_payload:
+      name: "apt-proxy-ubuntu"
+      online: true
+      storage:
+        blobStoreName: "apt-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "http://archive.ubuntu.com/ubuntu/"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+      apt:
+        distribution: "focal"
+        flat: false
+
+  # ---------------------------------------------------------
+  # 10. Raw (Generic Files / Scripts)
+  # ---------------------------------------------------------
+  - name: "raw-hosted-internal"
+    format: "raw"
+    type: "hosted"
+    api_payload:
+      name: "raw-hosted-internal"
+      online: true
+      storage:
+        blobStoreName: "raw-blobstore"
+        strictContentTypeValidation: false
+        writePolicy: "ALLOW"
+      raw:
+        contentDisposition: "ATTACHMENT"
+
+  # ---------------------------------------------------------
+  # 11. Cargo (Rust)
+  # ---------------------------------------------------------
+  - name: "cargo-proxy-crates"
+    format: "cargo"
+    type: "proxy"
+    api_payload:
+      name: "cargo-proxy-crates"
+      online: true
+      storage:
+        blobStoreName: "cargo-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://crates.io"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 12. Composer (PHP)
+  # ---------------------------------------------------------
+  - name: "composer-proxy-packagist"
+    format: "composer"
+    type: "proxy"
+    api_payload:
+      name: "composer-proxy-packagist"
+      online: true
+      storage:
+        blobStoreName: "composer-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://packagist.org"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440
+
+  # ---------------------------------------------------------
+  # 13. GitLFS (Large File Storage)
+  # ---------------------------------------------------------
+  - name: "gitlfs-hosted-internal"
+    format: "gitlfs"
+    type: "hosted"
+    api_payload:
+      name: "gitlfs-hosted-internal"
+      online: true
+      storage:
+        blobStoreName: "gitlfs-blobstore"
+        strictContentTypeValidation: true
+        writePolicy: "ALLOW_ONCE"
+
+  # ---------------------------------------------------------
+  # 14. Go Proxy (Golang)
+  # ---------------------------------------------------------
+  - name: "go-proxy-golang"
+    format: "go"
+    type: "proxy"
+    api_payload:
+      name: "go-proxy-golang"
+      online: true
+      storage:
+        blobStoreName: "go-blobstore"
+        strictContentTypeValidation: true
+      proxy:
+        remoteUrl: "https://proxy.golang.org"
+        contentMaxAge: 1440
+        metadataMaxAge: 1440

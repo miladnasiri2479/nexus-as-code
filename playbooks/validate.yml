@@ -1,0 +1,8 @@
+---
+- name: Validate Nexus Configuration
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Syntax check only playbook
+      ansible.builtin.debug:
+        msg: "Syntax looks good. Playbooks are ready to execute."

@@ -1,0 +1,15 @@
+---
+- name: Configure Nexus via REST API
+  hosts: all
+  become: false
+  gather_facts: false
+
+  roles:
+    - role: nexus_bootstrap
+      tags: ['nexus', 'bootstrap', 'security']
+    
+    - role: nexus_blobstores
+      tags: ['nexus', 'blobstores', 'storage']
+    
+    - role: nexus_repositories
+      tags: ['nexus', 'repositories', 'repos']

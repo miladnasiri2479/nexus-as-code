@@ -1,0 +1,9 @@
+---
+# roles/nexus_bootstrap/defaults/main.yml
+
+nexus:
+  hostname: "localhost"
+  http_port: 8081
+  data_dir: "/opt/nexus-data"
+  admin_password: "ChangeMe123!"
+  anonymous_access: false

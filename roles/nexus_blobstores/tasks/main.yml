@@ -1,0 +1,26 @@
+---
+# roles/blobstores/tasks/main.yml
+
+- name: Get list of existing blobstores
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores"
+    method: GET
+    user: "{{ nexus.admin_user | default('admin') }}"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    status_code: 200
+  register: existing_blobstores_api
+  no_log: true
+  changed_when: false
+
+- name: Set fact for existing blobstore names
+  ansible.builtin.set_fact:
+    existing_blobstore_names: "{{ existing_blobstores_api.json | map(attribute='name') | list }}"
+
+- name: Manage individual blobstores
+  ansible.builtin.include_tasks: manage_blobstore.yml
+  loop: "{{ blobstores }}"
+  loop_control:
+    loop_var: bs
+    label: "{{ bs.name }}"

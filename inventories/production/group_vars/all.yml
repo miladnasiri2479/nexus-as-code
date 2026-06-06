@@ -1,0 +1,48 @@
+---
+# ==========================================
+# 1. CORE NEXUS SETTINGS
+# ==========================================
+nexus:
+  hostname: "nexus.mycompany.local"
+  version: "3.68.0"
+  admin_password: "SuperSecretPassword123!"
+  admin_user: "admin"
+  http_port: 8081
+  data_dir: "/opt/nexus-data"
+  network_name: "nexus_network"
+  container_name: "nexus"
+  anonymous_access: false
+
+# ==========================================
+# 2. TRAEFIK (EDGE PROXY)
+# ==========================================
+traefik:
+  enabled: true
+  version: "v2.10"
+  domain: "{{ nexus.hostname }}"
+  letsencrypt: false
+  email: "admin@mycompany.local"
+  dashboard_enabled: false
+  config_dir: "/opt/traefik"
+
+# ==========================================
+# 3. STORAGE & BLOBSTORES
+# ==========================================
+blobstores:
+  - name: "default"
+    type: "file"
+  - name: "docker-blobstore"
+    type: "file"
+  - name: "maven-blobstore"
+    type: "file"
+
+# ==========================================
+# 4. REPOSITORIES CATALOG OVERRIDES
+# ==========================================
+repositories:
+  docker_hub:
+    enabled: true
+    blobstore: "docker-blobstore"
+  maven_central:
+    enabled: true
+    blobstore: "maven-blobstore"

@@ -1,0 +1,16 @@
+---
+# roles/traefik/defaults/main.yml
+
+traefik:
+  enabled: true
+  version: "v2.10"
+  domain: "nexus.example.com"
+  letsencrypt: false
+  email: "admin@example.com"
+  dashboard_enabled: false
+  config_dir: "/opt/traefik"
+
+nexus:
+  network_name: "nexus_network"
+  container_name: "nexus"
+  http_port: 8081

@@ -1,0 +1,15 @@
+---
+# roles/repositories/defaults/main.yml
+
+nexus:
+  hostname: "localhost"
+  http_port: 8081
+  admin_user: "admin"
+  admin_password: "ChangeMe123!"
+
+# Example of user input. This will typically be defined in group_vars/all.yml
+repositories:
+  docker_hub:
+    enabled: false
+  maven_central:
+    enabled: false

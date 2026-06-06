@@ -1,0 +1,69 @@
+---
+# roles/nexus/tasks/main.yml
+
+- name: Install Docker and Python Docker SDK (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - python3-docker
+    state: present
+    update_cache: true
+  when: ansible_os_family == 'Debian'
+
+- name: Install Docker and Python Docker SDK (RedHat/CentOS)
+  ansible.builtin.dnf:
+    name:
+      - docker
+      - python3-docker
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Ensure Docker service is running and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Create dedicated Docker network for Nexus
+  community.docker.docker_network:
+    name: "{{ nexus.network_name | default('nexus_network') }}"
+    state: present
+
+- name: Ensure Nexus data directory exists and has correct permissions
+  ansible.builtin.file:
+    path: "{{ nexus.data_dir }}"
+    state: directory
+    owner: "200"  # Nexus container runs as UID 200 by default
+    group: "200"
+    mode: '0755'
+
+- name: Deploy Nexus Docker Container
+  community.docker.docker_container:
+    name: nexus
+    image: "sonatype/nexus3:{{ nexus.version }}"
+    state: started
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ nexus.network_name | default('nexus_network') }}"
+    ports:
+      - "{{ nexus.http_port }}:8081"
+    volumes:
+      - "{{ nexus.data_dir }}:/nexus-data"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/service/rest/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+  notify: Restart Nexus Container
+
+- name: Wait for Nexus API to become ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port }}/service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: nexus_status
+  until: nexus_status.status == 200
+  retries: 30
+  delay: 10
+  changed_when: false
