@@ -1,0 +1,14 @@
+---
+# roles/storage/defaults/main.yml
+
+storage:
+  type: "file" # Valid options: file, s3, minio
+  
+  # The following variables are required if type is 's3' or 'minio'
+  # bucket: "my-nexus-bucket"
+  # access_key: "AKIA..."
+  # secret_key: "SECRET..."
+  # region: "us-east-1"
+  
+  # Required ONLY if type is 'minio'
+  # endpoint: "https://minio.mycompany.local"
