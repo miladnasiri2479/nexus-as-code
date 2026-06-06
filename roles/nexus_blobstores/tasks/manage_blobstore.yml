@@ -61,5 +61,7 @@
     body: "{{ bs_payload }}"
     status_code: 204
   when: bs_item.key in existing_blobstore_names
-  changed_when: true
+  # Note: Ansible cannot natively diff complex masked JSON responses from Nexus,
+  # but the Nexus PUT API is natively idempotent on the server side.
+  changed_when: false
   no_log: true

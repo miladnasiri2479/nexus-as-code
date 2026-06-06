@@ -97,16 +97,22 @@
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script"
     method: POST
-    user: "admin"
+    user: "{{ nexus.admin_user | default('admin') }}"
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     body_format: json
     body:
       name: "set-base-url"
       type: "groovy"
-      content: "core.baseUrl('{{ nexus.base_url }}')"
+      content: |
+        def currentUrl = core.baseUrl()
+        if (currentUrl != '{{ nexus.base_url }}') {
+            core.baseUrl('{{ nexus.base_url }}')
+            return "changed"
+        }
+        return "ok"
     status_code: [204, 201]
-  when: script_api_check.status == 200 and nexus.base_url is defined
+  when: script_api_check.status == 200 and nexus.base_url != ""
   ignore_errors: true
   no_log: true
 
@@ -114,26 +120,27 @@
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script/set-base-url/run"
     method: POST
-    user: "admin"
+    user: "{{ nexus.admin_user | default('admin') }}"
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     headers:
       Content-Type: "text/plain"
     status_code: 200
-  when: script_api_check.status == 200 and nexus.base_url is defined
+  register: base_url_script_result
+  when: script_api_check.status == 200 and nexus.base_url != ""
   ignore_errors: true
   no_log: true
-  changed_when: true
+  changed_when: base_url_script_result.json.result | default('') == 'changed'
 
 - name: Cleanup Base URL Script
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script/set-base-url"
     method: DELETE
-    user: "admin"
+    user: "{{ nexus.admin_user | default('admin') }}"
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     status_code: 204
-  when: script_api_check.status == 200 and nexus.base_url is defined
+  when: script_api_check.status == 200 and nexus.base_url != ""
   ignore_errors: true
   no_log: true
   changed_when: false

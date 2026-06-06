@@ -67,5 +67,7 @@
   when: 
     - is_enabled
     - final_payload.name in existing_repo_names
+  # Note: Ansible cannot natively diff complex masked JSON responses from Nexus,
+  # but the Nexus PUT API is natively idempotent on the server side.
+  changed_when: false
   no_log: true
-  changed_when: true
