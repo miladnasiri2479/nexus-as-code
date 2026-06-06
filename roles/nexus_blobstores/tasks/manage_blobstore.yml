@@ -1,70 +1,58 @@
 ---
-# roles/blobstores/tasks/manage_blobstore.yml
+# roles/nexus_blobstores/tasks/manage_blobstore.yml
 
 - name: Prepare File Blobstore Payload
   ansible.builtin.set_fact:
     bs_payload:
-      name: "{{ bs.name }}"
-      path: "{{ bs.path | default('/nexus-data/blobs/' + bs.name) }}"
+      name: "{{ bs_item.key }}"
+      path: "{{ nexus.data_dir | default('/opt/nexus-data') }}/blobs/{{ bs_item.key }}"
       softQuota: null
-  when: bs.type == 'file'
+    api_type: "file"
+  when: storage.type == 'file'
 
-- name: Prepare S3 Blobstore Payload
+- name: Prepare S3/MinIO Blobstore Payload
   ansible.builtin.set_fact:
     bs_payload:
-      name: "{{ bs.name }}"
+      name: "{{ bs_item.key }}"
       softQuota: null
       bucketConfiguration:
         bucket:
-          region: "{{ bs.region | default('us-east-1') }}"
-          name: "{{ bs.bucket }}"
-          prefix: "{{ bs.prefix | default('') }}"
-          expiration: "{{ bs.expiration | default(-1) }}"
+          region: "{{ storage.region | default('us-east-1') }}"
+          name: "{{ storage.bucket }}"
+          prefix: "{{ bs_item.key }}" # Use blobstore name as prefix inside the bucket
+          expiration: -1
         encryption:
-          encryptionType: "{{ bs.encryption_type | default('s3Managed') }}"
-          encryptionKey: "{{ bs.encryption_key | default('') }}"
+          encryptionType: "s3Managed"
+          encryptionKey: ""
         bucketSecurity:
-          accessKeyId: "{{ bs.access_key | default('') }}"
-          secretAccessKey: "{{ bs.secret_key | default('') }}"
-          role: "{{ bs.role | default('') }}"
-          sessionToken: "{{ bs.session_token | default('') }}"
+          accessKeyId: "{{ storage.access_key }}"
+          secretAccessKey: "{{ storage.secret_key }}"
+          role: ""
+          sessionToken: ""
         advancedBucketConnection:
-          endpoint: "{{ bs.endpoint | default('') }}"
-          signerType: "{{ bs.signer_type | default('') }}"
-          forcePathStyle: "{{ bs.force_path_style | default(true if bs.endpoint is defined else false) }}"
-          maxConnectionPoolSize: "{{ bs.max_connection_pool_size | default(50) }}"
-  when: bs.type == 's3'
-
-- name: Get current Blobstore config to check for changes
-  ansible.builtin.uri:
-    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores/{{ bs.type }}/{{ bs.name }}"
-    method: GET
-    user: "{{ nexus.admin_user | default('admin') }}"
-    password: "{{ nexus.admin_password }}"
-    force_basic_auth: true
-    return_content: true
-    status_code: 200
-  register: current_bs_config
-  when: bs.name in existing_blobstore_names
-  no_log: true
-  changed_when: false
+          endpoint: "{{ storage.endpoint | default('') }}"
+          signerType: ""
+          forcePathStyle: "{{ true if storage.type == 'minio' else false }}"
+          maxConnectionPoolSize: 50
+    api_type: "s3"
+  when: storage.type in ['s3', 'minio']
 
 - name: Create Blobstore (If Missing)
   ansible.builtin.uri:
-    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores/{{ bs.type }}"
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores/{{ api_type }}"
     method: POST
     user: "{{ nexus.admin_user | default('admin') }}"
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     body_format: json
     body: "{{ bs_payload }}"
-    status_code: [204, 201] # Nexus 3 API sometimes returns 201 or 204 on creation
-  when: bs.name not in existing_blobstore_names
+    status_code: [204, 201]
+  when: bs_item.key not in existing_blobstore_names
   no_log: true
 
 - name: Update Blobstore (If Exists & Config Differs)
   ansible.builtin.uri:
-    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores/{{ bs.type }}/{{ bs.name }}"
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores/{{ api_type }}/{{ bs_item.key }}"
     method: PUT
     user: "{{ nexus.admin_user | default('admin') }}"
     password: "{{ nexus.admin_password }}"
@@ -72,12 +60,6 @@
     body_format: json
     body: "{{ bs_payload }}"
     status_code: 204
-  when: 
-    - bs.name in existing_blobstore_names
-    # Compare current bucket payload with desired (ignoring nulls/omissions handled natively by API comparison if we wanted to be strictly precise, but standard dict comparison works fine for updates)
-    # To keep it truly idempotent without excessive false positive updates, we update if a specific PUT is necessary.
-    # Note: Passwords/Secrets are returned as masked from API, so exact dict match is hard. PUTting unchanged data is mostly safe.
+  when: bs_item.key in existing_blobstore_names
   changed_when: true
   no_log: true
-  # In a highly optimized role, you'd compare current_bs_config.json with bs_payload.
-  # But due to secret masking by Nexus ("****"), a PUT is safely idempotent and updates settings appropriately.

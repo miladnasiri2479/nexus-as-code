@@ -1,5 +1,5 @@
 ---
-# roles/blobstores/tasks/main.yml
+# roles/nexus_blobstores/tasks/main.yml
 
 - name: Get list of existing blobstores
   ansible.builtin.uri:
@@ -18,9 +18,10 @@
   ansible.builtin.set_fact:
     existing_blobstore_names: "{{ existing_blobstores_api.json | map(attribute='name') | list }}"
 
-- name: Manage individual blobstores
+- name: Manage individual blobstores dynamically based on storage.type
   ansible.builtin.include_tasks: manage_blobstore.yml
-  loop: "{{ blobstores }}"
+  loop: "{{ blobstores | dict2items }}"
   loop_control:
-    loop_var: bs
-    label: "{{ bs.name }}"
+    loop_var: bs_item
+    label: "{{ bs_item.key }}"
+  when: bs_item.value.enabled | default(false) | bool
