@@ -1,73 +1,79 @@
 ---
 # playbooks/site.yml
 # ==============================================================================
-# NEXUS AS CODE - MAIN ENTRYPOINT
+# NEXUS AS CODE - FEATURE FLAG EXECUTION ENGINE
 # ==============================================================================
 # This playbook orchestrates the deployment and configuration of Sonatype Nexus.
-# Execution order strictly follows the System Contract DAG.
+# It acts as a strict declarative engine: Optional roles are ONLY executed if
+# their corresponding feature flag is enabled in the variables.
 
-- name: Phase 1 - Infrastructure Provisioning
+- name: Nexus as Code - Full Lifecycle Deployment
   hosts: nexus_servers
-  become: true
   gather_facts: true
   
   pre_tasks:
     - name: Verify Supported OS Family
       ansible.builtin.assert:
         that: ansible_os_family in ['Debian', 'RedHat']
-        msg: "Unsupported OS. Only Debian and RedHat families are supported."
+        fail_msg: "Unsupported OS. Only Debian and RedHat families are supported."
         quiet: true
       tags: ['always']
 
   roles:
+    # --------------------------------------------------------------------------
+    # BASE FLOW (Always Execute)
+    # --------------------------------------------------------------------------
     - role: preflight
-      tags: ['preflight', 'validate']
+      become: true
+      tags: ['preflight', 'base']
     
     - role: nexus_deploy
-      tags: ['nexus', 'deploy']
-
-# ------------------------------------------------------------------------------
-# Phase 2 - API Configuration & Security
-# ------------------------------------------------------------------------------
-
-- name: Phase 2 - API Configuration & Security
-  hosts: nexus_servers
-  become: false  # API calls run from localhost to Nexus port, root not strictly required
-  gather_facts: false
-  roles:
+      become: true
+      tags: ['nexus', 'base']
+      
     - role: nexus_bootstrap
-      tags: ['api', 'bootstrap', 'security']
+      become: false  # API calls over localhost:8081
+      tags: ['bootstrap', 'base']
 
-# ------------------------------------------------------------------------------
-# Phase 3 - Storage & Repositories
-# ------------------------------------------------------------------------------
-
-- name: Phase 3 - Storage & Repositories
-  hosts: nexus_servers
-  become: false
-  gather_facts: false
-  roles:
+    # --------------------------------------------------------------------------
+    # OPTIONAL FLOW (Feature Flagged)
+    # --------------------------------------------------------------------------
     - role: storage
-      tags: ['storage', 'validate']
-      
+      become: false
+      when: features.storage.enabled | default(false) | bool
+      tags: ['storage', 'optional']
+
     - role: nexus_blobstores
-      tags: ['storage', 'blobstores']
-      
+      become: false
+      when: features.blobstores.enabled | default(false) | bool
+      tags: ['blobstores', 'optional']
+
     - role: nexus_repositories
-      tags: ['repos', 'repositories']
+      become: false
+      when: features.repositories.enabled | default(false) | bool
+      tags: ['repositories', 'optional']
 
-# ------------------------------------------------------------------------------
-# Phase 4 - Edge Routing & Hardening
-# ------------------------------------------------------------------------------
+    - role: nexus_cluster
+      become: true
+      when: features.cluster.enabled | default(false) | bool
+      tags: ['cluster', 'optional']
 
-- name: Phase 4 - Edge Routing & Hardening
-  hosts: nexus_servers
-  become: true
-  gather_facts: false
-  roles:
-    - role: traefik
-      when: traefik is defined and (traefik.enabled | default(false) | bool)
-      tags: ['proxy', 'traefik']
-      
-    - role: security_hardening
-      tags: ['security', 'hardening']
+    - role: loadbalancer
+      become: true
+      when: features.loadbalancer.enabled | default(false) | bool
+      tags: ['loadbalancer', 'optional']
+
+    - role: scaling_engine
+      become: true
+      when: features.scaling.enabled | default(false) | bool
+      tags: ['scaling', 'optional']
+
+    - role: backup
+      become: true
+      when: features.backup.enabled | default(false) | bool
+      tags: ['backup', 'optional']
+
+    - role: monitoring
+      become: false
+      when: features.monitoring.enabled | default(false) | bool
+      tags: ['monitoring', 'optional']
