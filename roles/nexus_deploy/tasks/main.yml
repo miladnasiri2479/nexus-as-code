@@ -1,7 +1,7 @@
 ---
-# roles/nexus/tasks/main.yml
+# roles/nexus_deploy/tasks/main.yml
 
-- name: Install Docker and Python Docker SDK (Debian/Ubuntu)
+- name: Install Docker and dependencies (Debian/Ubuntu)
   ansible.builtin.apt:
     name:
       - docker.io
@@ -10,7 +10,7 @@
     update_cache: true
   when: ansible_os_family == 'Debian'
 
-- name: Install Docker and Python Docker SDK (RedHat/CentOS)
+- name: Install Docker and dependencies (RedHat/CentOS)
   ansible.builtin.dnf:
     name:
       - docker
@@ -24,46 +24,47 @@
     state: started
     enabled: true
 
-- name: Create dedicated Docker network for Nexus
+- name: Create dedicated Docker network
   community.docker.docker_network:
-    name: "{{ nexus.network_name | default('nexus_network') }}"
+    name: "{{ nexus.network_name | default('nexus-net') }}"
     state: present
 
-- name: Ensure Nexus data directory exists and has correct permissions
+- name: Ensure Nexus persistent data directory exists
   ansible.builtin.file:
-    path: "{{ nexus.data_dir }}"
+    path: "{{ nexus.data_dir | default('/opt/nexus-data') }}"
     state: directory
-    owner: "200"  # Nexus container runs as UID 200 by default
+    owner: "200"  # Sonatype Nexus container runs as UID 200 by default
     group: "200"
     mode: '0755'
 
-- name: Deploy Nexus Docker Container
+- name: Deploy Sonatype Nexus Container
   community.docker.docker_container:
-    name: nexus
-    image: "sonatype/nexus3:{{ nexus.version }}"
+    name: "{{ nexus.container_name | default('nexus') }}"
+    image: "sonatype/nexus3:{{ nexus.version | default('latest') }}"
     state: started
-    restart_policy: unless-stopped
+    restart_policy: always
     networks:
-      - name: "{{ nexus.network_name | default('nexus_network') }}"
+      - name: "{{ nexus.network_name | default('nexus-net') }}"
     ports:
-      - "{{ nexus.http_port }}:8081"
+      - "{{ nexus.http_port | default(8081) }}:8081"
     volumes:
-      - "{{ nexus.data_dir }}:/nexus-data"
+      - "{{ nexus.data_dir | default('/opt/nexus-data') }}:/nexus-data"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/service/rest/v1/status"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
-  notify: Restart Nexus Container
+      start_period: 120s  # Nexus takes a while to boot initially
+  register: nexus_container_state
 
-- name: Wait for Nexus API to become ready
+- name: Wait until Nexus API is fully ready
   ansible.builtin.uri:
-    url: "http://localhost:{{ nexus.http_port }}/service/rest/v1/status"
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
     method: GET
     status_code: 200
   register: nexus_status
   until: nexus_status.status == 200
   retries: 30
-  delay: 10
+  delay: 15
   changed_when: false
+  # This acts as an integration check ensuring Phase 1 completes correctly before Phase 2 starts.

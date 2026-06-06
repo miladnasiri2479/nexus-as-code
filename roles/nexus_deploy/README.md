@@ -1,24 +1,20 @@
-# Nexus Docker Role
+# Nexus Deploy Role
 
-This role deploys Sonatype Nexus as a Docker container. It is designed to be fully idempotent, production-ready, and adheres to Ansible best practices by exclusively using native Ansible modules (no shell commands).
+Deploys Sonatype Nexus inside a Docker container. Ensures all underlying infrastructure (Docker daemon, networks, storage volumes) is correctly configured before booting the service.
 
 ## Features
-- **Docker Setup**: Automatically installs Docker and its Python bindings based on OS (`Debian` or `RedHat`).
-- **Networking**: Creates an isolated, dedicated Docker network.
-- **Persistent Storage**: Configures the host directory with correct permissions (`UID 200` for Nexus).
-- **Resilience**: Configures a health check and an `unless-stopped` restart policy.
-- **Safety**: Actively polls the Nexus API endpoint to verify readiness before handing execution back to the playbook.
+- **Docker Validation**: Installs Docker and the `python3-docker` SDK required by Ansible.
+- **Persistent Storage**: Ensures the data directory exists and is owned by UID `200` (required by the `sonatype/nexus3` image).
+- **Idempotency**: Utilizes `community.docker.docker_container`. Will not recreate the container if the configuration matches the desired state.
+- **Readiness Check**: Implements a native Docker health check and blocks Ansible execution via `ansible.builtin.uri` polling until the Nexus API returns HTTP 200.
 
 ## Variables
 Available variables in `nexus` dictionary (usually set in `group_vars/all.yml`):
 - `nexus.version`: The Nexus Docker image tag (e.g., `3.68.0`).
-- `nexus.data_dir`: Absolute path on the host for persistent data (e.g., `/opt/nexus-data`).
-- `nexus.http_port`: Port exposed on the host for web access (e.g., `8081`).
-- `nexus.network_name`: Name of the Docker network.
+- `nexus.data_dir`: Absolute path on the host for persistent data (default: `/opt/nexus-data`).
+- `nexus.http_port`: Port exposed on the host for web access (default: `8081`).
+- `nexus.network_name`: Name of the Docker network (default: `nexus-net`).
+- `nexus.container_name`: Name of the Docker container (default: `nexus`).
 
 ## Dependencies
-This role uses the `community.docker` Ansible collection. Make sure it is installed (e.g., via `requirements.yml`):
-```yaml
-collections:
-  - name: community.docker
-```
+Requires the `community.docker` Ansible collection.

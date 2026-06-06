@@ -1,8 +1,9 @@
 ---
-# roles/nexus/defaults/main.yml
+# roles/nexus_deploy/defaults/main.yml
 
 nexus:
   version: "3.68.0"
   data_dir: "/opt/nexus-data"
   http_port: 8081
-  network_name: "nexus_network"
+  network_name: "nexus-net"
+  container_name: "nexus"
