@@ -1,6 +1,7 @@
 ---
 # roles/nexus_bootstrap/tasks/main.yml
 
+# 1. Wait for Nexus API readiness
 - name: Wait for Nexus API to be accessible
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/status"
@@ -9,10 +10,11 @@
   register: nexus_status
   until: nexus_status.status == 200
   retries: 30
-  delay: 10
+  delay: 15
   changed_when: false
 
-- name: Check if admin password is already changed
+# Check if auth has already been changed to target password
+- name: Check if admin password is already configured
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/users?userId=admin"
     method: GET
@@ -24,7 +26,8 @@
   changed_when: false
   no_log: true
 
-- name: Read initial admin password from file
+# 2. Retrieve initial admin password from container (via host mount)
+- name: Retrieve initial admin password from container volume
   ansible.builtin.slurp:
     src: "{{ nexus.data_dir | default('/opt/nexus-data') }}/admin.password"
   register: initial_password_file
@@ -37,7 +40,8 @@
   when: admin_auth_check.status in [401, 403] and not initial_password_file.failed
   no_log: true
 
-- name: Change admin password
+# 3. Change admin password using API
+- name: Change admin password using API
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/users/admin/change-password"
     method: PUT
@@ -53,6 +57,7 @@
   when: admin_auth_check.status in [401, 403] and initial_password is defined
   no_log: true
 
+# 4. Disable anonymous access
 - name: Get current anonymous access state
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/anonymous"
@@ -81,6 +86,67 @@
   when: anonymous_state.json.enabled != nexus.anonymous_access | default(false)
   no_log: true
 
+# 5. Set base URL for Nexus (Via Scripts API as no standard v1 REST endpoint exists)
+# Note: Requires `nexus.scripts.allowCreation=true` in nexus.properties to work in modern Nexus versions.
+- name: Check if Scripting API is accessible for Base URL (Optional)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script"
+    method: GET
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 403, 404]
+  register: script_api_check
+  changed_when: false
+  no_log: true
+  ignore_errors: true
+
+- name: Configure Base URL via Script API
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script"
+    method: POST
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    body_format: json
+    body:
+      name: "set-base-url"
+      type: "groovy"
+      content: "core.baseUrl('{{ nexus.base_url }}')"
+    status_code: [204, 201]
+  when: script_api_check.status == 200 and nexus.base_url is defined
+  ignore_errors: true
+  no_log: true
+
+- name: Execute Base URL Script
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script/set-base-url/run"
+    method: POST
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: "text/plain"
+    status_code: 200
+  when: script_api_check.status == 200 and nexus.base_url is defined
+  ignore_errors: true
+  no_log: true
+  changed_when: true
+
+- name: Cleanup Base URL Script
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/script/set-base-url"
+    method: DELETE
+    user: "admin"
+    password: "{{ nexus.admin_password }}"
+    force_basic_auth: true
+    status_code: 204
+  when: script_api_check.status == 200 and nexus.base_url is defined
+  ignore_errors: true
+  no_log: true
+  changed_when: false
+
+# 6. Enable required realms
 - name: Get current active security realms
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/realms/active"
@@ -89,11 +155,15 @@
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     status_code: 200
-  register: active_realms
+  register: active_realms_api
   changed_when: false
   no_log: true
 
-- name: Enable Docker Bearer Token Realm
+- name: Combine required realms with active realms
+  ansible.builtin.set_fact:
+    merged_realms: "{{ (active_realms_api.json + nexus.active_realms) | unique }}"
+
+- name: Enable required realms (Docker Bearer Token, Authenticating Realm)
   ansible.builtin.uri:
     url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/security/realms/active"
     method: PUT
@@ -101,7 +171,7 @@
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     body_format: json
-    body: "{{ active_realms.json + ['DockerToken'] }}"
+    body: "{{ merged_realms }}"
     status_code: 204
-  when: "'DockerToken' not in active_realms.json"
+  when: merged_realms | sort != active_realms_api.json | sort
   no_log: true
