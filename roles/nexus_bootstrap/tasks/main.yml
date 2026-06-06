@@ -167,3 +167,7 @@
     status_code: 204
   when: merged_realms | sort != active_realms_api.json | sort
   no_log: true
+
+# 7. Post-Deployment QA Validation
+- name: Run Nexus Configuration Validation
+  ansible.builtin.include_tasks: validate.yml
