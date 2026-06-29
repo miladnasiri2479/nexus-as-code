@@ -32,7 +32,7 @@
     password: "{{ nexus.admin_password }}"
     force_basic_auth: true
     status_code: 204
-  when: 
+  when:
     - not is_enabled
     - final_payload.name in existing_repo_names
   no_log: true
@@ -48,7 +48,7 @@
     body_format: json
     body: "{{ final_payload }}"
     status_code: 201
-  when: 
+  when:
     - is_enabled
     - final_payload.name not in existing_repo_names
   no_log: true
@@ -64,7 +64,7 @@
     body_format: json
     body: "{{ final_payload }}"
     status_code: 204
-  when: 
+  when:
     - is_enabled
     - final_payload.name in existing_repo_names
   # Note: Ansible cannot natively diff complex masked JSON responses from Nexus,

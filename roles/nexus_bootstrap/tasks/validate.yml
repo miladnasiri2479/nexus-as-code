@@ -37,7 +37,7 @@
 
 - name: Assert Anonymous Access State
   ansible.builtin.assert:
-    that: 
+    that:
       - val_anon.json.enabled == (nexus.anonymous_access | default(false))
     fail_msg: "[ERROR] Validation Failed: Anonymous access state does not match desired configuration."
     success_msg: "[OK] Validation Passed: Anonymous access is correctly configured."
@@ -57,7 +57,7 @@
 
 - name: Assert Security Realms Configuration
   ansible.builtin.assert:
-    that: 
+    that:
       - item in val_realms.json
     fail_msg: "[ERROR] Validation Failed: Required realm '{{ item }}' is missing."
     success_msg: "[OK] Validation Passed: Realm '{{ item }}' is active."

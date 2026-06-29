@@ -10,7 +10,7 @@
 - name: Nexus as Code - Full Lifecycle Deployment
   hosts: nexus_servers
   gather_facts: true
-  
+
   pre_tasks:
     - name: Verify Supported OS Family
       ansible.builtin.assert:
@@ -26,11 +26,11 @@
     - role: preflight
       become: true
       tags: ['preflight', 'base']
-    
+
     - role: nexus_deploy
       become: true
       tags: ['nexus', 'base']
-      
+
     - role: nexus_bootstrap
       become: false  # API calls over localhost:8081
       tags: ['bootstrap', 'base']

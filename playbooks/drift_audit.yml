@@ -89,7 +89,7 @@
           'remediation': 'Run configure playbook (Phase 3) to provision missing repositories.'
         }] }}"
       loop: "{{ repositories | dict2items }}"
-      when: 
+      when:
         - item.value.enabled | default(false) | bool
         - loaded_catalog.repo_catalog[item.key] is defined
         - loaded_catalog.repo_catalog[item.key].api_payload.name not in actual_repo_names
@@ -104,7 +104,7 @@
           'remediation': 'Run configure playbook (Phase 3) to clean up orphaned repositories.'
         }] }}"
       loop: "{{ repositories | dict2items }}"
-      when: 
+      when:
         - not (item.value.enabled | default(false) | bool)
         - loaded_catalog.repo_catalog[item.key] is defined
         - loaded_catalog.repo_catalog[item.key].api_payload.name in actual_repo_names
@@ -116,7 +116,7 @@
           DRIFT DETECTION REPORT
           ==================================================
           Total drifted resources detected: {{ drift_report | length }}
-          
+
           {{ drift_report | to_nice_yaml }}
       when: drift_report | length > 0
 

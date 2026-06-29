@@ -43,7 +43,7 @@
     path: "{{ nexus.data_dir }}/"
     state: absent
   # Careful: this is destructive, but necessary for a clean restore.
-  
+
 - name: Recreate Nexus data directory
   ansible.builtin.file:
     path: "{{ nexus.data_dir }}"

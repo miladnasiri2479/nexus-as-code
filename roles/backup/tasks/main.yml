@@ -20,7 +20,7 @@
   ansible.builtin.apt:
     name: awscli
     state: present
-  when: 
+  when:
     - features.backup.destination in ['s3', 'minio']
     - ansible_os_family == 'Debian'
 
@@ -28,7 +28,7 @@
   ansible.builtin.dnf:
     name: awscli
     state: present
-  when: 
+  when:
     - features.backup.destination in ['s3', 'minio']
     - ansible_os_family == 'RedHat'
 
