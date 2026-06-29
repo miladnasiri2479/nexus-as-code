@@ -1,8 +1,0 @@
----
-# roles/nexus/handlers/main.yml
-
-- name: Restart Nexus Container
-  community.docker.docker_container:
-    name: nexus
-    state: started
-    restart: true

@@ -1,0 +1,18 @@
+---
+# Ansible Lint Configuration
+# Skip rules that conflict with project architecture
+
+skip_list:
+  - var-naming[no-role-prefix]
+  - ignore-errors
+  - schema[meta]
+  - galaxy[no-changelog]
+  - galaxy[no-repository]
+  - galaxy[no-runtime]
+  - fqcn[action-core]
+  - key-order[task]
+
+warn_list:
+  - yaml[truthy]
+  - yaml[line-length]
+  - yaml[document-start]

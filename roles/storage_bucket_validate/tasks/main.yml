@@ -41,19 +41,14 @@
   tags: [storage, buckets, existence]
 
 - name: Bucket Validate | Write test file
-  block:
-    - name: Bucket Validate | Write test data
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          echo "nexus-validation-$(date +%s)" | /usr/local/bin/mc pipe {{ nexus_minio_alias }}/{{ item.name }}/{{ nexus_bucket_validate_test_prefix }}test.txt
-        executable: /bin/bash
-      register: _write_test
-      changed_when: true
-  rescue:
-    - name: Bucket Validate | Write test failed
-      ansible.builtin.set_fact:
-        _bucket_errors: "{{ _bucket_errors + ['BUCKET_WRITE_FAILED: ' + item.name] }}"
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      echo "nexus-validation-$(date +%s)" | /usr/local/bin/mc pipe {{ nexus_minio_alias }}/{{ item.name }}/{{ nexus_bucket_validate_test_prefix }}test.txt
+    executable: /bin/bash
+  register: _write_test
+  changed_when: true
+  failed_when: false
   loop: "{{ nexus_buckets }}"
   loop_control:
     label: "{{ item.name }}"
@@ -61,6 +56,18 @@
     - nexus_storage_type == 's3'
     - nexus_bucket_validate_connectivity | bool
     - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, connectivity]
+
+- name: Bucket Validate | Report write failures
+  ansible.builtin.set_fact:
+    _bucket_errors: "{{ _bucket_errors + ['BUCKET_WRITE_FAILED: ' + item.item.name] }}"
+  loop: "{{ _write_test.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_connectivity | bool
+    - item is failed
   tags: [storage, buckets, connectivity]
 
 - name: Bucket Validate | Cleanup test file

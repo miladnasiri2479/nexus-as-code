@@ -1,4 +1,0 @@
----
-# roles/nexus_repositories/defaults/main.yml
-# All variables are securely managed in group_vars/all.yml
-# Do not store secrets here.

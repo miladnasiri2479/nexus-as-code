@@ -1,9 +1,0 @@
----
-# roles/preflight/defaults/main.yml
-
-preflight:
-  nexus_port: 8081
-  traefik_http_port: 80
-  traefik_https_port: 443
-  min_disk_space_gb: 10
-  nexus_data_path: "/opt/nexus-data" # Path to check for disk space

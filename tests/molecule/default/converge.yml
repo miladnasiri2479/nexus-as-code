@@ -3,13 +3,13 @@
   hosts: all
   become: true
   roles:
-    - role: nexus-as-code.common
-    - role: nexus-as-code.java
-    - role: nexus-as-code.nexus_install
-    - role: nexus-as-code.nexus_config
-    - role: nexus-as-code.nexus_blobstores
-    - role: nexus-as-code.nexus_repos
-    - role: nexus-as-code.nexus_repos_groups
-    - role: nexus-as-code.nexus_cleanup
-    - role: nexus-as-code.nexus_security
-    - role: nexus-as-code.nexus_validation
+    - role: common
+    - role: java
+    - role: nexus_install
+    - role: nexus_config
+    - role: nexus_blobstores
+    - role: nexus_repos
+    - role: nexus_repos_groups
+    - role: nexus_cleanup
+    - role: nexus_security
+    - role: nexus_validation

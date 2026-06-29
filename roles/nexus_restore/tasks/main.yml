@@ -35,6 +35,7 @@
           sha256sum -c "{{ nexus_restore_source }}.sha256"
         executable: /bin/bash
       register: _checksum_result
+      changed_when: false
   rescue:
     - name: Restore | Checksum verification failed
       ansible.builtin.fail:

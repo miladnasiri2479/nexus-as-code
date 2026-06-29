@@ -9,11 +9,11 @@
 nexus:
   hostname: "nexus.mycompany.local"
   version: "3.68.0"
-  
+
   # Admin Credentials
   admin_user: "admin"
   admin_password: "SuperSecretPassword123!" # Required: Min 8 chars
-  
+
   # External Database Credentials (Used if cluster is enabled)
   db_url: "jdbc:postgresql://postgres.internal:5432/nexus"
   db_user: "nexus"
@@ -41,14 +41,14 @@ features:
     enabled: true
   repositories:
     enabled: true
-  
+
   cluster:
     enabled: false
     replicas: 3
-    
+
   loadbalancer:
     enabled: false
-    
+
   scaling:
     enabled: false
 
