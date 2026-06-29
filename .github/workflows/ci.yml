@@ -1,3 +1,4 @@
+---
 name: CI Pipeline
 
 on:
@@ -36,7 +37,6 @@ jobs:
           python3 scripts/validate_config.py
 
       - name: Ansible Lint
-        # Skip rules that might conflict with our specific design (like role names needing certain prefixes if applicable, though we strive for standard)
         run: ansible-lint -q
 
   dry-run:
@@ -54,7 +54,6 @@ jobs:
           ansible-galaxy collection install community.docker amazon.aws
 
       - name: Setup Mock Inventory & Config
-        # We copy the sample inventory to simulate a production run safely
         run: |
           cp -r inventory/sample inventories/production
           sed -i 's/ansible_host=192.168.1.100/ansible_connection=local/g' inventories/production/hosts.yml
@@ -65,8 +64,5 @@ jobs:
           ansible-playbook -i inventories/production/hosts.yml playbooks/drift_audit.yml --syntax-check
 
       - name: Dry Run Base Flow
-        # We run in check mode. Some tasks (like asserting docker is running) will fail 
-        # because docker isn't configured by the playbook in check mode. 
-        # So we skip the preflight role during this generic dry-run.
         run: |
           ansible-playbook -i inventories/production/hosts.yml playbooks/site.yml --check --skip-tags "preflight"
