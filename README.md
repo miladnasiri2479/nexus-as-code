@@ -142,6 +142,83 @@ nexus_repos:
     http_port: 5000
 ```
 
+## Destroy / Cleanup
+
+Remove Nexus and all related files from target hosts.
+
+### ⚠️ Warning
+
+This is a **destructive operation**. It will permanently remove:
+
+- Nexus service
+- Nexus installation directory
+- Nexus data directory
+- Nexus configuration files
+- Nexus logs
+- Docker containers (if applicable)
+
+### Usage
+
+```bash
+# Interactive destroy (requires confirmation)
+ansible-playbook -i inventories/production/inventory.yml playbooks/nexus_destroy.yml
+
+# The playbook will ask for confirmation:
+#   Type 'YES DESTROY' to confirm
+```
+
+### Options
+
+| Variable | Default | Description |
+|---|---|---|
+| `nexus_destroy_confirm` | `false` | Must be `true` to proceed |
+| `nexus_destroy_service` | `true` | Stop and disable service |
+| `nexus_destroy_install_dir` | `true` | Remove `/opt/sonatype` |
+| `nexus_destroy_data_dir` | `true` | Remove `/var/nexus/data` |
+| `nexus_destroy_config` | `true` | Remove config files |
+| `nexus_destroy_logs` | `true` | Remove log directory |
+| `nexus_destroy_backup` | `false` | Remove backup directory |
+| `nexus_destroy_user` | `false` | Remove nexus user/group |
+
+### What Gets Removed
+
+| Item | Path | Default |
+|---|---|---|
+| Service | `nexus.service` | ✅ Stopped |
+| Installation | `/opt/sonatype` | ✅ Removed |
+| Data | `/var/nexus/data` | ✅ Removed |
+| Config | `/etc/default/nexus` | ✅ Removed |
+| Systemd | `/etc/systemd/system/nexus.service` | ✅ Removed |
+| Logs | `/var/log/nexus` | ✅ Removed |
+| Backup | `/var/nexus/backup` | ❌ Kept |
+| User | `nexus` | ❌ Kept |
+
+### Full Cleanup
+
+```bash
+# Remove everything including backups and user
+ansible-playbook -i inventories/production/inventory.yml playbooks/nexus_destroy.yml \
+  -e "nexus_destroy_backup=true nexus_destroy_user=true"
+```
+
+### Verify Cleanup
+
+After destroy, verify no traces remain:
+
+```bash
+# Check service
+systemctl status nexus
+
+# Check directories
+ls -la /opt/sonatype /var/nexus /etc/nexus
+
+# Check user
+id nexus
+
+# Check processes
+ps aux | grep nexus
+```
+
 ## License
 
 Apache License 2.0
