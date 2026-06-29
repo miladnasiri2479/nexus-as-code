@@ -1,3 +1,6 @@
 ---
 # External role dependencies
 # No external dependencies required - all roles are self-contained.
+# This file is intentionally minimal.
+roles: []
+collections: []
