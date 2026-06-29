@@ -205,60 +205,48 @@ ansible-playbook -i inventories/production/inventory.yml playbooks/nexus_destroy
 
 After destroy, verify no traces remain.
 
-**For systemd (bare-metal) deployment:**
+**Check Docker container is removed:**
 
 ```bash
-# Check service is stopped
-systemctl status nexus
-
-# Check directories are removed
-ls -la /opt/sonatype /var/nexus /etc/nexus /var/log/nexus
-
-# Check systemd unit is removed
-ls -la /etc/systemd/system/nexus.service
-
-# Check environment file is removed
-ls -la /etc/default/nexus
-
-# Check user is removed
-id nexus
-
-# Check no Nexus processes running
-ps aux | grep nexus
-
-# Check port is free
-ss -tlnp | grep 8081
+docker ps -a | grep nexus
 ```
 
-**For Docker deployment:**
+**Check Docker network is removed:**
 
 ```bash
-# Check container is removed
-docker ps -a | grep nexus
-
-# Check network is removed
 docker network ls | grep nexus
+```
 
-# Check volumes are removed
+**Check Docker volumes are removed:**
+
+```bash
 docker volume ls | grep nexus
+```
 
-# Check images (optional - removes Nexus image only)
+**Check Docker image (optional):**
+
+```bash
 docker images | grep sonatype/nexus3
+```
 
-# Check no Nexus processes running
-ps aux | grep nexus
+**Check no Nexus processes running:**
 
-# Check port is free
+```bash
+ps aux | grep nexus | grep -v grep
+```
+
+**Check port is free:**
+
+```bash
 ss -tlnp | grep 8081
 ```
 
 **Automated verification:**
 
 ```bash
-# Run all checks
-echo "=== Service ===" && systemctl status nexus 2>/dev/null || echo "OK: Service not found"
-echo "=== Directories ===" && ls -la /opt/sonatype /var/nexus 2>/dev/null || echo "OK: Directories not found"
-echo "=== User ===" && id nexus 2>/dev/null || echo "OK: User not found"
+echo "=== Container ===" && docker ps -a | grep nexus || echo "OK: Container not found"
+echo "=== Network ===" && docker network ls | grep nexus || echo "OK: Network not found"
+echo "=== Volumes ===" && docker volume ls | grep nexus || echo "OK: Volumes not found"
 echo "=== Processes ===" && ps aux | grep nexus | grep -v grep || echo "OK: No processes"
 echo "=== Port ===" && ss -tlnp | grep 8081 || echo "OK: Port free"
 ```
