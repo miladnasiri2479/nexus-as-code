@@ -1,0 +1,10 @@
+# Nexus VM Options
+# Managed by Ansible - DO NOT EDIT MANUALLY
+
+{{ nexus_jvm_memory }}
+
+-Xmx{{ nexus_max_direct_memory }}
+
+{{ nexus_jvm_additional }}
+
+{{ nexus_extra_jvm_opts }}

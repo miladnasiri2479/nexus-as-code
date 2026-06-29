@@ -1,0 +1,78 @@
+---
+nexus_install_method: binary
+nexus_version: "3.72.0"
+nexus_edition: oss
+nexus_download_base_url: "https://download.sonatype.com/nexus/3"
+nexus_download_url: ""
+nexus_download_checksum: ""
+nexus_download_checksum_algorithm: sha256
+nexus_download_timeout: 600
+nexus_download_proxy: ""
+nexus_download_proxy_user: ""
+nexus_download_proxy_password: ""
+nexus_service_name: nexus
+nexus_service_state: started
+nexus_service_enabled: true
+nexus_service_restart_policy: on-failure
+nexus_service_restart_sec: 10
+nexus_service_timeout_start: 300
+nexus_service_timeout_stop: 60
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_https_enabled: false
+nexus_https_port: 8443
+nexus_install_dir: /opt/sonatype
+nexus_app_dir: "{{ nexus_install_dir }}/nexus-{{ nexus_edition }}-{{ nexus_version }}"
+nexus_current_link: "{{ nexus_install_dir }}/current"
+nexus_data_dir: /var/nexus/data
+nexus_temp_dir: /var/nexus/tmp
+nexus_work_dir: /var/nexus/scratch
+nexus_runas_user: nexus
+nexus_runas_group: nexus
+nexus_jvm_memory: "-Xms2703m -Xmx2703m"
+nexus_jvm_additional: ""
+nexus_extra_jvm_opts: ""
+nexus_max_direct_memory: "2703m"
+nexus_enable_nexus_orient: true
+nexus_vmoptions_path: "{{ nexus_data_dir }}/etc/nexus.vmoptions"
+nexus_docker_image: "sonatype/nexus3"
+nexus_docker_tag: "{{ nexus_version }}"
+nexus_docker_container_name: nexus
+nexus_docker_network_mode: host
+nexus_docker_ports:
+  - "{{ nexus_port }}:8081"
+nexus_docker_volumes:
+  - "{{ nexus_data_dir }}/data:/nexus-data"
+  - "{{ nexus_data_dir }}/logs:/nexus-data/log"
+nexus_docker_env: {}
+nexus_docker_install4j: ""
+nexus_docker_restart_policy: unless-stopped
+nexus_docker_memory_limit: ""
+nexus_docker_cpus: ""
+nexus_docker_healthcheck_enabled: true
+nexus_docker_healthcheck_interval: 30
+nexus_docker_healthcheck_timeout: 10
+nexus_docker_healthcheck_retries: 5
+nexus_docker_healthcheck_start_period: 60
+nexus_docker_compose_dir: /opt/nexus
+nexus_docker_compose_file: "{{ nexus_docker_compose_dir }}/docker-compose.yml"
+nexus_docker_compose_project: nexus
+nexus_wait_for_api: true
+nexus_api_health_path: /service/rest/v1/status
+nexus_api_retries: 30
+nexus_api_delay: 10
+nexus_api_timeout: 5
+nexus_api_expected_status: 200
+nexus_upgrade_enabled: true
+nexus_upgrade_backup_before: true
+nexus_upgrade_rollback_on_failure: true
+nexus_upgrade_skip_if_current: true
+nexus_upgrade_verify_version: true
+nexus_limits_nofile: 65536
+nexus_limits_nproc: 65536
+nexus_log_dir: "{{ nexus_data_dir }}/log"
+nexus_log_file: nexus.log
+nexus_http_proxy: ""
+nexus_https_proxy: ""
+nexus_no_proxy: ""

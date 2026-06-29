@@ -1,61 +1,28 @@
 ---
-# roles/storage/tasks/main.yml
-
-- name: Validate storage type enum
-  ansible.builtin.assert:
-    that:
-      - storage.type is defined
-      - storage.type in ['file', 's3', 'minio']
-    fail_msg: "[ERROR] Invalid storage type. Must be 'file', 's3', or 'minio'."
-    success_msg: "[OK] Storage type is valid."
-    quiet: true
-
-- name: Handle local file storage
+- name: Storage | Display role info
   ansible.builtin.debug:
-    msg: "[INFO] Storage type is 'file'. No external storage validation required."
-  when: storage.type == 'file'
+    msg: "Configuring storage backend: {{ nexus_storage_type }}"
+  tags: [storage]
 
-- name: Assert required S3/MinIO variables
+- name: Storage | Validate storage type
   ansible.builtin.assert:
     that:
-      - storage.bucket is defined
-      - storage.access_key is defined
-      - storage.secret_key is defined
-    fail_msg: "[ERROR] 'bucket', 'access_key', and 'secret_key' MUST be defined when using S3 or MinIO."
-    quiet: true
-  when: storage.type in ['s3', 'minio']
+      - nexus_storage_type in ['file', 's3']
+    fail_msg: "[STORAGE] ERROR: nexus_storage_type must be 'file' or 's3'. Got: {{ nexus_storage_type }}"
+  tags: [storage, validate]
 
-- name: Assert MinIO specific endpoint variable
-  ansible.builtin.assert:
-    that:
-      - storage.endpoint is defined
-    fail_msg: "[ERROR] 'endpoint' MUST be defined when storage.type is 'minio'."
-    quiet: true
-  when: storage.type == 'minio'
+- name: Storage | Set storage facts
+  ansible.builtin.set_fact:
+    _storage_file_enabled: "{{ nexus_storage_type == 'file' }}"
+    _storage_s3_enabled: "{{ nexus_storage_type == 's3' }}"
+    _storage_minio_enabled: "{{ nexus_storage_minio.enabled | default(false) }}"
+  tags: [storage, init]
 
-# Note: The amazon.aws.s3_bucket_info module relies on boto3 and natively 
-# handles AWS Signature V4 authentication, endpoint resolution, and bucket lookups.
-- name: Validate Bucket Existence and Connectivity (S3/MinIO)
-  amazon.aws.s3_bucket_info:
-    name: "{{ storage.bucket }}"
-    access_key: "{{ storage.access_key }}"
-    secret_key: "{{ storage.secret_key }}"
-    region: "{{ storage.region | default('us-east-1') }}"
-    endpoint_url: "{{ storage.endpoint | default(omit) }}"
-  register: bucket_info
-  when: storage.type in ['s3', 'minio']
-  no_log: true
-  ignore_errors: true
-
-- name: Assert Bucket is Accessible
-  ansible.builtin.assert:
-    that:
-      - bucket_info is not failed
-      - bucket_info.buckets | length > 0
-    fail_msg: |
-      [ERROR] Storage Validation Failed!
-      Could not connect to {{ storage.type }} or bucket '{{ storage.bucket }}' does not exist.
-      Please verify your credentials, endpoint, and ensure the bucket is provisioned.
-    success_msg: "[OK] Successfully connected to {{ storage.type }} bucket."
-    quiet: true
-  when: storage.type in ['s3', 'minio']
+- name: Storage | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[STORAGE] Configuration Complete"
+      - "  Type: {{ nexus_storage_type }}"
+      - "  Blobstores: {{ nexus_blobstores | length }}"
+      - "  Buckets: {{ nexus_buckets | length }}"
+  tags: [storage, summary]

@@ -1,4 +1,58 @@
 ---
-# roles/storage/defaults/main.yml
-# All variables are securely managed in group_vars/all.yml
-# Do not store secrets here.
+nexus_storage_type: file
+nexus_storage_local:
+  path: /data/nexus
+  owner: "{{ nexus_runas_user | default('nexus') }}"
+  group: "{{ nexus_runas_group | default('nexus') }}"
+  mode: "0755"
+  create_subdirs: true
+  min_free_space_gb: 10
+  mounts: []
+nexus_storage_s3:
+  enabled: false
+  region: us-east-1
+  bucket_prefix: nexus
+  access_key_id: ""
+  secret_access_key: ""
+  endpoint: ""
+  path_style_access: false
+  max_error_retry: "5"
+  encryption: ""
+  sse_kms_key_id: ""
+nexus_storage_minio:
+  enabled: false
+  version: "RELEASE.2024-01-16T16-07-38Z"
+  port: 9000
+  console_port: 9001
+  access_key: ""
+  secret_key: ""
+  data_dir: /data/minio
+  volumes: ""
+  tls_enabled: false
+nexus_blobstores: []
+nexus_buckets: []
+nexus_bucket_auto_create: true
+nexus_bucket_auto_validate: true
+nexus_runas_user: nexus
+nexus_runas_group: nexus
+nexus_admin_user: admin
+nexus_admin_password: ""
+nexus_validate_certs: true
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_api_scheme: http
+nexus_api_version: v1
+nexus_api_timeout: 30
+nexus_api_retries: 3
+nexus_api_retry_delay: 5
+nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
+nexus_data_dir: /var/nexus/data
+nexus_minio_port: 9000
+nexus_minio_access_key: ""
+nexus_minio_secret_key: ""
+nexus_minio_alias: nexus
+nexus_s3_access_key_id: ""
+nexus_s3_secret_access_key: ""
+nexus_s3_region: us-east-1
+nexus_s3_endpoint: ""

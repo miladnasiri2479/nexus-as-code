@@ -1,0 +1,27 @@
+---
+# Molecule test configuration for default scenario
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: nexus-test
+    image: geerlingguy/docker-ubuntu2204-ansible
+    pre_build_image: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    command: /lib/systemd/systemd
+    build dockerfile: Dockerfile
+    image_name: nexus-test
+provisioner:
+  name: ansible
+  inventory:
+    group_vars:
+      all:
+        nexus_admin_password: admin123
+        nexus_version: "3.72.0"
+        nexus_port: 8081
+verifier:
+  name: ansible

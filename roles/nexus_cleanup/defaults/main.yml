@@ -1,0 +1,53 @@
+---
+###############################################################################
+# nexus_cleanup — defaults
+#
+# Cleanup policy configuration. All values from group_vars.
+###############################################################################
+
+# List of cleanup policies to create.
+# Type: list[dict]
+nexus_cleanup_policies: []
+
+# Delete policies not defined in nexus_cleanup_policies.
+# Type: bool
+nexus_cleanup_delete_unmanaged: false
+
+# Valid cleanup age units.
+# Type: list[string]
+nexus_cleanup_valid_age_units:
+  - minutes
+  - hours
+  - days
+  - weeks
+  - months
+
+# API connection.
+# Type: string
+nexus_admin_user: admin
+nexus_admin_password: ""
+nexus_validate_certs: true
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_api_scheme: http
+nexus_api_version: v1
+nexus_api_timeout: 30
+nexus_api_retries: 3
+nexus_api_retry_delay: 5
+
+# Computed URLs.
+# Type: string (derived)
+nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
+nexus_cleanup_list_url: "{{ nexus_api_base_url }}/cleanup-policies"
+nexus_cleanup_create_url: "{{ nexus_api_base_url }}/cleanup-policies"
+
+# Operational settings.
+# Type: bool/string/int
+nexus_cleanup_run_once: false
+nexus_cleanup_delegate_to: ""
+nexus_cleanup_diff: true
+nexus_no_log: true
+nexus_http_proxy: ""
+nexus_https_proxy: ""
+nexus_no_proxy: ""

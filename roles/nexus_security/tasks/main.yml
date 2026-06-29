@@ -1,0 +1,187 @@
+---
+###############################################################################
+# nexus_security — tasks/main.yml
+#
+# Configure core security: anonymous access, realms, SSL, admin password.
+# All values from variables — no hardcoded values.
+# Supports: check_mode, diff, delegate_to, run_once, no_log
+###############################################################################
+
+- name: Security | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring Nexus security"
+  tags: [nexus, security]
+
+###############################################################################
+# VALIDATE
+###############################################################################
+
+- name: Security | Assert admin password is set
+  ansible.builtin.assert:
+    that:
+      - nexus_admin_password | default('') | length > 0
+    fail_msg: >-
+      [SECURITY] ERROR: Missing required variable 'nexus_admin_password'.
+      Set it in your inventory: nexus_admin_password: "{{ vault_nexus_admin_password }}"
+  tags: [nexus, security, validate]
+
+- name: Security | Assert SSL settings when enabled
+  ansible.builtin.assert:
+    that:
+      - nexus_ssl_keystore | default('') | length > 0
+    fail_msg: >-
+      [SECURITY] ERROR: SSL enabled but nexus_ssl_keystore is empty.
+      Set nexus_ssl_keystore in your inventory.
+  when: nexus_ssl_enabled
+  tags: [nexus, security, validate, ssl]
+
+- name: Security | Validate realm names
+  ansible.builtin.assert:
+    that:
+      - item in nexus_valid_realms
+    fail_msg: >-
+      [SECURITY] ERROR: Invalid realm '{{ item }}'.
+      Valid realms: {{ nexus_valid_realms | join(', ') }}
+  loop: "{{ nexus_realms }}"
+  loop_control:
+    label: "Realm: {{ item }}"
+    pause: 0
+  when: nexus_realms | length > 0
+  tags: [nexus, security, validate, realms]
+
+###############################################################################
+# ANONYMOUS ACCESS
+###############################################################################
+
+- name: Security | Configure anonymous access
+  ansible.builtin.uri:
+    url: "{{ nexus_security_anonymous_url }}"
+    method: PUT
+    body_format: json
+    body:
+      enabled: "{{ nexus_anonymous_access_enabled }}"
+      userId: "{{ nexus_anonymous_user }}"
+      realmName: "{{ nexus_anonymous_realm }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _security_anonymous
+  until: >-
+    _security_anonymous.status in [200, 204] and
+    'error' not in (_security_anonymous.json | default({}) | string | lower)
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_security_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_security_run_once }}"
+  diff: "{{ nexus_security_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  check_mode: false
+  tags: [nexus, security, anonymous]
+
+- name: Security | Display anonymous access result
+  ansible.builtin.debug:
+    msg: "Anonymous access: {{ nexus_anonymous_access_enabled }}"
+  tags: [nexus, security, anonymous]
+
+###############################################################################
+# REALMS
+###############################################################################
+
+- name: Security | Enable security realms
+  ansible.builtin.uri:
+    url: "{{ nexus_security_realms_url }}"
+    method: PUT
+    body_format: json
+    body: "{{ nexus_realms }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _security_realms
+  until: >-
+    _security_realms.status in [200, 204] and
+    'error' not in (_security_realms.json | default({}) | string | lower)
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_security_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_security_run_once }}"
+  diff: "{{ nexus_security_diff }}"
+  check_mode: false
+  when: nexus_realms | length > 0
+  tags: [nexus, security, realms]
+
+- name: Security | Display enabled realms
+  ansible.builtin.debug:
+    msg: "Enabled realms: {{ nexus_realms | join(', ') }}"
+  tags: [nexus, security, realms]
+
+###############################################################################
+# SSL/TLS
+###############################################################################
+
+- name: Security | Enable SSL Only mode
+  ansible.builtin.uri:
+    url: "{{ nexus_security_ssl_url }}"
+    method: PUT
+    body_format: json
+    body:
+      forceSSL: "{{ nexus_security_force_ssl }}"
+      sslOnly: "{{ nexus_security_ssl_only }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _security_ssl
+  until: >-
+    _security_ssl.status in [200, 204] and
+    'error' not in (_security_ssl.json | default({}) | string | lower)
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_security_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_security_run_once }}"
+  diff: "{{ nexus_security_diff }}"
+  check_mode: false
+  when: >-
+    nexus_ssl_enabled or
+    nexus_security_force_ssl or
+    nexus_security_ssl_only
+  tags: [nexus, security, ssl, config]
+
+- name: Security | Display SSL configuration
+  ansible.builtin.debug:
+    msg: "SSL: {{ nexus_ssl_enabled }}, Force: {{ nexus_security_force_ssl }}"
+  when: nexus_ssl_enabled or nexus_security_force_ssl
+  tags: [nexus, security, ssl]
+
+###############################################################################
+# SUMMARY
+###############################################################################
+
+- name: Security | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[SECURITY] Configuration Complete"
+      - "  Anonymous: {{ nexus_anonymous_access_enabled }}"
+      - "  Realms: {{ nexus_realms | join(', ') }}"
+      - "  SSL: {{ nexus_ssl_enabled }}"
+      - "  Force SSL: {{ nexus_security_force_ssl }}"
+  tags: [nexus, security, summary]

@@ -1,0 +1,27 @@
+---
+all:
+  children:
+    nexus:
+      hosts:
+        nexus-01.example.com:
+          ansible_host: 10.0.1.10
+          ansible_user: deployer
+          ansible_become: true
+        # nexus-02.example.com:
+        #   ansible_host: 10.0.1.11
+        #   ansible_user: deployer
+        #   ansible_become: true
+      vars:
+        ansible_user: deployer
+        ansible_become: true
+        ansible_python_interpreter: /usr/bin/python3
+
+    minio:
+      hosts:
+        minio-01.example.com:
+          ansible_host: 10.0.1.20
+          ansible_user: deployer
+          ansible_become: true
+      vars:
+        ansible_user: deployer
+        ansible_become: true

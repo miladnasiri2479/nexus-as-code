@@ -1,0 +1,139 @@
+---
+###############################################################################
+# nexus_security — defaults
+#
+# Core security settings. All values come from group_vars/nexus.yml.
+# No hardcoded values in tasks — everything reads from this file.
+###############################################################################
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ADMIN
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Admin username.
+# Type: string
+nexus_admin_user: admin
+
+# Admin password.
+# Type: string (sensitive)
+nexus_admin_password: ""
+
+# ──────────────────────────────────────────────────────────────────────────────
+# API CONNECTION
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Validate SSL certificates for API calls.
+# Type: bool
+nexus_validate_certs: true
+
+# Nexus API connection.
+# Type: string/int
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_api_scheme: http
+nexus_api_version: v1
+nexus_api_timeout: 30
+
+# API retry settings.
+# Type: int
+nexus_api_retries: 3
+nexus_api_retry_delay: 5
+
+# Computed API base URL.
+# Type: string (derived)
+nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
+
+# Service name (for future handler use).
+# Type: string
+nexus_service_name: nexus
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ANONYMOUS ACCESS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Enable anonymous access.
+# Type: bool
+nexus_anonymous_access_enabled: false
+
+# Anonymous user settings.
+# Type: string
+nexus_anonymous_user: anonymous
+nexus_anonymous_realm: "nx-anonymous"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# REALMS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Active security realms.
+# Type: list[string]
+nexus_realms:
+  - NexusAuthenticatingRealm
+  - NexusAuthoringRealm
+
+# Valid realm names (for validation).
+# Type: list[string]
+nexus_valid_realms:
+  - NexusAuthenticatingRealm
+  - NexusAuthoringRealm
+  - LdapRealm
+  - DockerToken
+  - BearerToken
+  - npmToken
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SSL/TLS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Enable SSL.
+# Type: bool
+nexus_ssl_enabled: false
+
+# SSL certificate settings.
+# Type: string
+nexus_ssl_keystore: ""
+nexus_ssl_truststore: ""
+nexus_ssl_password: ""
+nexus_ssl_host_port: 8443
+nexus_ssl_self_signed: false
+
+# Force SSL for all connections.
+# Type: bool
+nexus_security_force_ssl: false
+nexus_security_ssl_only: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# COMPUTED URLs
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Security API URLs.
+# Type: string (derived)
+nexus_security_anonymous_url: "{{ nexus_api_base_url }}/security/anonymous"
+nexus_security_realms_url: "{{ nexus_api_base_url }}/security/realms/active"
+nexus_security_ssl_url: "{{ nexus_api_base_url }}/security/sSL"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OPERATIONAL SETTINGS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Run once in multi-host deployments.
+# Type: bool
+nexus_security_run_once: false
+
+# Delegate to specific host (bastion).
+# Type: string
+nexus_security_delegate_to: ""
+
+# Enable diff mode for API calls.
+# Type: bool
+nexus_security_diff: true
+
+# Log sensitive variables (set true for production, false for debugging).
+# Type: bool
+nexus_no_log: false
+
+# Proxy environment.
+# Type: string
+nexus_http_proxy: ""
+nexus_https_proxy: ""
+nexus_no_proxy: ""

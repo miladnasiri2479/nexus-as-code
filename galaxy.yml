@@ -1,0 +1,34 @@
+---
+namespace: nexus_as_code
+name: nexus
+version: 1.0.0
+description: Production-grade Ansible project for deploying and managing Sonatype Nexus Repository Manager
+license: Apache-2.0
+min_ansible_version: "2.14"
+
+authors:
+  - nexus-as-code
+
+dependencies: []
+
+platforms:
+  - name: EL
+    versions: [8, 9]
+  - name: Ubuntu
+    versions: [20.04, 22.04, 24.04]
+  - name: Debian
+    versions: [11, 12]
+
+galaxy_info:
+  role_name: nexus
+  description: Deploy and manage Sonatype Nexus Repository Manager
+  author: nexus-as-code
+  license: Apache-2.0
+  min_ansible_version: "2.14"
+  galaxy_tags:
+    - nexus
+    - repository
+    - maven
+    - docker
+    - devops
+    - infrastructure

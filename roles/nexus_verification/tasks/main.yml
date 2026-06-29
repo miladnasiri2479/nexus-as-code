@@ -1,0 +1,344 @@
+---
+- name: Verification | Display role info
+  ansible.builtin.debug:
+    msg: "Verifying Nexus deployment"
+  when: nexus_verification_enabled
+  tags: [nexus, verification]
+
+- name: Verification | Initialize results
+  ansible.builtin.set_fact:
+    _verification_results: []
+    _verification_errors: []
+  when: nexus_verification_enabled
+  tags: [nexus, verification]
+
+- name: Verification | Check API health
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/status"
+    method: GET
+    status_code: 200
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_api
+  until: _verify_api.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'api' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, api]
+
+- name: Verification | Report API status
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['API: OK'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'api' in nexus_verification_checks"
+    - _verify_api is success
+  tags: [nexus, verification, api]
+
+- name: Verification | Report API failure
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['API: FAILED'] }}"
+    _verification_errors: "{{ _verification_errors + ['API health check failed'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'api' in nexus_verification_checks"
+    - _verify_api is failed
+  tags: [nexus, verification, api]
+
+- name: Verification | Get repositories
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/repositories"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_repos
+  until: _verify_repos.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'repos' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, repos]
+
+- name: Verification | Report repos count
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['REPOS: ' + (_verify_repos.json | default([]) | length | string) + ' found'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'repos' in nexus_verification_checks"
+    - _verify_repos is success
+  tags: [nexus, verification, repos]
+
+- name: Verification | Check missing repos
+  ansible.builtin.set_fact:
+    _verify_missing_repos: "{{ nexus_repos | default([]) | map(attribute='name') | select('not in', _verify_repos.json | default([]) | map(attribute='name') | list) | list }}"
+  when:
+    - nexus_verification_enabled
+    - "'repos' in nexus_verification_checks"
+    - _verify_repos is success
+  tags: [nexus, verification, repos]
+
+- name: Verification | Report missing repos
+  ansible.builtin.set_fact:
+    _verification_errors: "{{ _verification_errors + ['MISSING_REPOS: ' + (_verify_missing_repos | join(', '))] }}"
+  when:
+    - nexus_verification_enabled
+    - "'repos' in nexus_verification_checks"
+    - (_verify_missing_repos | default([])) | length > 0
+  tags: [nexus, verification, repos]
+
+- name: Verification | Get blobstores
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/blobstores"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_blobstores
+  until: _verify_blobstores.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'blobstores' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, blobstores]
+
+- name: Verification | Report blobstores count
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['BLOBSTORES: ' + (_verify_blobstores.json | default([]) | length | string) + ' found'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'blobstores' in nexus_verification_checks"
+    - _verify_blobstores is success
+  tags: [nexus, verification, blobstores]
+
+- name: Verification | Check missing blobstores
+  ansible.builtin.set_fact:
+    _verify_missing_bs: "{{ nexus_blobstores | default([]) | map(attribute='name') | select('not in', _verify_blobstores.json | default([]) | map(attribute='name') | list) | list }}"
+  when:
+    - nexus_verification_enabled
+    - "'blobstores' in nexus_verification_checks"
+    - _verify_blobstores is success
+  tags: [nexus, verification, blobstores]
+
+- name: Verification | Report missing blobstores
+  ansible.builtin.set_fact:
+    _verification_errors: "{{ _verification_errors + ['MISSING_BLOBSTORES: ' + (_verify_missing_bs | join(', '))] }}"
+  when:
+    - nexus_verification_enabled
+    - "'blobstores' in nexus_verification_checks"
+    - (_verify_missing_bs | default([])) | length > 0
+  tags: [nexus, verification, blobstores]
+
+- name: Verification | Get users
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/security/users"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_users
+  until: _verify_users.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'users' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, users]
+
+- name: Verification | Report users count
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['USERS: ' + (_verify_users.json | default([]) | length | string) + ' found'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'users' in nexus_verification_checks"
+    - _verify_users is success
+  tags: [nexus, verification, users]
+
+- name: Verification | Get roles
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/security/roles"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_roles
+  until: _verify_roles.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'roles' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, roles]
+
+- name: Verification | Report roles count
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['ROLES: ' + (_verify_roles.json | default([]) | length | string) + ' found'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'roles' in nexus_verification_checks"
+    - _verify_roles is success
+  tags: [nexus, verification, roles]
+
+- name: Verification | Get cleanup policies
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/cleanup-policies"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_cleanup
+  until: _verify_cleanup.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'cleanup' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, cleanup]
+
+- name: Verification | Report cleanup count
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['CLEANUP: ' + (_verify_cleanup.json | default([]) | length | string) + ' policies'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'cleanup' in nexus_verification_checks"
+    - _verify_cleanup is success
+  tags: [nexus, verification, cleanup]
+
+- name: Verification | Get repository groups
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/repositories/group"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _verify_groups
+  until: _verify_groups.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_verification_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_verification_run_once }}"
+  when:
+    - nexus_verification_enabled
+    - "'groups' in nexus_verification_checks"
+  ignore_errors: true
+  tags: [nexus, verification, groups]
+
+- name: Verification | Report groups count
+  ansible.builtin.set_fact:
+    _verification_results: "{{ _verification_results + ['GROUPS: ' + (_verify_groups.json | default([]) | length | string) + ' found'] }}"
+  when:
+    - nexus_verification_enabled
+    - "'groups' in nexus_verification_checks"
+    - _verify_groups is success
+  tags: [nexus, verification, groups]
+
+- name: Verification | Check missing groups
+  ansible.builtin.set_fact:
+    _verify_missing_groups: "{{ nexus_repo_groups | default([]) | map(attribute='name') | select('not in', _verify_groups.json | default([]) | map(attribute='name') | list) | list }}"
+  when:
+    - nexus_verification_enabled
+    - "'groups' in nexus_verification_checks"
+    - _verify_groups is success
+  tags: [nexus, verification, groups]
+
+- name: Verification | Report missing groups
+  ansible.builtin.set_fact:
+    _verification_errors: "{{ _verification_errors + ['MISSING_GROUPS: ' + (_verify_missing_groups | join(', '))] }}"
+  when:
+    - nexus_verification_enabled
+    - "'groups' in nexus_verification_checks"
+    - (_verify_missing_groups | default([])) | length > 0
+  tags: [nexus, verification, groups]
+
+- name: Verification | Display results
+  ansible.builtin.debug:
+    msg:
+      - "[VERIFICATION] Results:"
+      - "{{ _verification_results | default([]) | list }}"
+      - "Errors: {{ _verification_errors | default([]) | length }}"
+  when: nexus_verification_enabled
+  tags: [nexus, verification, report]
+
+- name: Verification | Fail on errors
+  ansible.builtin.fail:
+    msg: "[VERIFICATION] FAILED: {{ _verification_errors | join(', ') }}"
+  when:
+    - nexus_verification_enabled
+    - nexus_verification_fail_on_error
+    - (_verification_errors | default([])) | length > 0
+  tags: [nexus, verification, report]
+
+- name: Verification | Display success
+  ansible.builtin.debug:
+    msg: "[VERIFICATION] PASSED — all checks successful"
+  when:
+    - nexus_verification_enabled
+    - (_verification_errors | default([])) | length == 0
+  tags: [nexus, verification, report]

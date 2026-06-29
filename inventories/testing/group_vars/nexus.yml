@@ -1,0 +1,8 @@
+---
+# Testing environment overrides
+
+nexus_version: "3.72.0"
+nexus_port: 8081
+nexus_backup_enabled: false
+nexus_validation_retries: 5
+nexus_validation_delay: 5

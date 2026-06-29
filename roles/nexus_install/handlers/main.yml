@@ -1,0 +1,33 @@
+---
+###############################################################################
+# nexus_install — handlers
+#
+# Service management handlers. Triggered by task notifications.
+###############################################################################
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: Reload systemd
+
+- name: Restart nexus
+  ansible.builtin.systemd:
+    name: "{{ nexus_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when:
+    - nexus_service_state == 'started'
+    - nexus_install_method == 'binary'
+  listen: Restart nexus
+
+- name: Restart nexus docker
+  community.docker.docker_compose:
+    project_src: "{{ nexus_docker_compose_dir }}"
+    project_name: "{{ nexus_docker_compose_project }}"
+    files:
+      - docker-compose.yml
+    state: present
+    restart: true
+  when:
+    - nexus_install_method in ['docker', 'compose']
+  listen: Restart nexus docker

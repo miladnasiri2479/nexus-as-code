@@ -1,0 +1,306 @@
+---
+###############################################################################
+# nexus_install — tasks/install_binary.yml
+#
+# Bare-metal installation: download, extract, systemd, health check.
+# Handles version upgrades automatically.
+###############################################################################
+
+###############################################################################
+# PRE-FLIGHT CHECKS
+###############################################################################
+
+- name: Binary | Assert required variables
+  ansible.builtin.assert:
+    that:
+      - nexus_version | default('') | length > 0
+      - nexus_edition | default('') | length > 0
+      - nexus_port | int > 0
+    fail_msg: >-
+      MISSING_VARIABLE: nexus_version, nexus_edition, and nexus_port are required.
+      Check your group_vars/nexus.yml file.
+  tags: [nexus, binary, validate]
+
+###############################################################################
+# COMPUTE DOWNLOAD URL
+###############################################################################
+
+- name: Binary | Compute download URL
+  ansible.builtin.set_fact:
+    _nexus_download_url: >-
+      {{ nexus_download_url if nexus_download_url | default('') | length > 0
+         else (nexus_download_base_url ~ '/nexus-' ~ nexus_edition ~ '-' ~ nexus_version ~ '.tar.gz') }}
+  tags: [nexus, binary, url]
+
+- name: Binary | Display download URL
+  ansible.builtin.debug:
+    var: _nexus_download_url
+  tags: [nexus, binary, url]
+
+###############################################################################
+# DETECT CURRENT VERSION
+###############################################################################
+
+- name: Binary | Check if Nexus is installed
+  ansible.builtin.stat:
+    path: "{{ nexus_current_link }}/bin/nexus"
+  register: _nexus_binary_exists
+  tags: [nexus, binary, detect]
+
+- name: Binary | Get installed version
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      "{{ nexus_current_link }}/bin/nexus" --version 2>/dev/null \
+        | head -1 \
+        | grep -oP '\d+\.\d+\.\d+' \
+        || echo "not_installed"
+    executable: /bin/bash
+  register: _nexus_installed_version
+  changed_when: false
+  when: _nexus_binary_exists.stat.exists
+  tags: [nexus, binary, detect]
+
+- name: Binary | Set version facts
+  ansible.builtin.set_fact:
+    _nexus_current_version: "{{ _nexus_installed_version.stdout | default('not_installed') }}"
+    _nexus_needs_install: >-
+      {{ not _nexus_binary_exists.stat.exists or
+         _nexus_installed_version.stdout | default('not_installed') != nexus_version }}
+  tags: [nexus, binary, detect]
+
+- name: Binary | Display current version
+  ansible.builtin.debug:
+    msg: >-
+      Current: {{ _nexus_current_version }} |
+      Target:  {{ nexus_version }} |
+      Needs install: {{ _nexus_needs_install }}
+  tags: [nexus, binary, detect]
+
+###############################################################################
+# PRE-UPGRADE BACKUP
+###############################################################################
+
+- name: Binary | Backup before upgrade
+  ansible.builtin.include_role:
+    name: nexus_backup
+    tasks_from: main.yml
+  when:
+    - _nexus_needs_install | bool
+    - nexus_upgrade_backup_before | bool
+    - _nexus_current_version != 'not_installed'
+  tags: [nexus, binary, backup]
+
+###############################################################################
+# STOP SERVICE (for upgrade)
+###############################################################################
+
+- name: Binary | Stop Nexus service (upgrade)
+  ansible.builtin.systemd:
+    name: "{{ nexus_service_name }}"
+    state: stopped
+  when:
+    - _nexus_needs_install | bool
+    - nexus_upgrade_stop_service | default(true) | bool
+    - _nexus_current_version != 'not_installed'
+  tags: [nexus, binary, service]
+
+- name: Binary | Wait for service to stop
+  block:
+    - name: Binary | Wait for port to be free
+      ansible.builtin.wait_for:
+        port: "{{ nexus_port }}"
+        state: stopped
+        timeout: "{{ nexus_service_timeout_stop }}"
+        msg: "Waiting for Nexus to stop..."
+  rescue:
+    - name: Binary | Service may already be stopped
+      ansible.builtin.debug:
+        msg: "Service stop timeout, continuing..."
+  when:
+    - _nexus_needs_install | bool
+    - nexus_upgrade_stop_service | default(true) | bool
+    - _nexus_current_version != 'not_installed'
+  tags: [nexus, binary, service]
+
+###############################################################################
+# DOWNLOAD
+###############################################################################
+
+- name: Binary | Download Nexus tarball
+  ansible.builtin.get_url:
+    url: "{{ _nexus_download_url }}"
+    dest: "/tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz"
+    mode: "0644"
+    timeout: "{{ nexus_download_timeout }}"
+    use_proxy: "{{ nexus_download_proxy | default('') | length > 0 }}"
+    proxy: "{{ nexus_download_proxy | default(omit) }}"
+    proxy_username: "{{ nexus_download_proxy_user | default(omit) }}"
+    proxy_password: "{{ nexus_download_proxy_password | default(omit) }}"
+  when: _nexus_needs_install | bool
+  register: _nexus_download_result
+  tags: [nexus, binary, download]
+
+- name: Binary | Verify checksum
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      echo "{{ nexus_download_checksum }}  /tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz" \
+        | {{ nexus_download_checksum_algorithm }}sum -c -
+    executable: /bin/bash
+  changed_when: false
+  when:
+    - _nexus_needs_install | bool
+    - nexus_download_checksum | default('') | length > 0
+  tags: [nexus, binary, download]
+
+###############################################################################
+# EXTRACT
+###############################################################################
+
+- name: Binary | Create installation directory
+  ansible.builtin.file:
+    path: "{{ nexus_install_dir }}"
+    state: directory
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  tags: [nexus, binary, dirs]
+
+- name: Binary | Extract Nexus tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz"
+    dest: "{{ nexus_install_dir }}"
+    remote_src: true
+    creates: "{{ nexus_app_dir }}"
+  when: _nexus_needs_install | bool
+  tags: [nexus, binary, extract]
+
+- name: Binary | Remove downloaded tarball
+  ansible.builtin.file:
+    path: "/tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz"
+    state: absent
+  tags: [nexus, binary, cleanup]
+
+###############################################################################
+# SYMLINK & PERMISSIONS
+###############################################################################
+
+- name: Binary | Create version symlink
+  ansible.builtin.file:
+    src: "{{ nexus_app_dir }}"
+    dest: "{{ nexus_current_link }}"
+    state: link
+    force: true
+  tags: [nexus, binary, symlink]
+
+- name: Binary | Set ownership on directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    recurse: false
+  loop:
+    - "{{ nexus_install_dir }}"
+    - "{{ nexus_app_dir }}"
+    - "{{ nexus_data_dir }}"
+    - "{{ nexus_temp_dir }}"
+    - "{{ nexus_work_dir }}"
+    - "{{ nexus_log_dir }}"
+  tags: [nexus, binary, permissions]
+
+###############################################################################
+# SERVICE FILES
+###############################################################################
+
+- name: Binary | Write environment file
+  ansible.builtin.template:
+    src: nexus-env.j2
+    dest: /etc/default/nexus
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart nexus
+  tags: [nexus, binary, config]
+
+- name: Binary | Write systemd unit file
+  ansible.builtin.template:
+    src: nexus.service.j2
+    dest: /etc/systemd/system/nexus.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart nexus
+  tags: [nexus, binary, service]
+
+- name: Binary | Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: [nexus, binary, service]
+
+###############################################################################
+# START SERVICE
+###############################################################################
+
+- name: Binary | Enable and start Nexus
+  ansible.builtin.systemd:
+    name: "{{ nexus_service_name }}"
+    state: "{{ nexus_service_state }}"
+    enabled: "{{ nexus_service_enabled }}"
+  tags: [nexus, binary, service]
+
+###############################################################################
+# WAIT FOR API
+###############################################################################
+
+- name: Binary | Wait for Nexus API
+  ansible.builtin.uri:
+    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}{{ nexus_api_health_path }}"
+    method: GET
+    timeout: "{{ nexus_api_timeout }}"
+    status_code: "{{ nexus_api_expected_status }}"
+  register: _nexus_api_check
+  until: _nexus_api_check.status == nexus_api_expected_status
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_delay }}"
+  when:
+    - nexus_wait_for_api | bool
+    - nexus_service_state == 'started'
+  tags: [nexus, binary, verify]
+
+- name: Binary | Display API status
+  ansible.builtin.debug:
+    msg: "Nexus API is responding (HTTP {{ _nexus_api_check.status | default('N/A') }})"
+  when: nexus_wait_for_api | bool
+  tags: [nexus, binary, verify]
+
+###############################################################################
+# UPGRADE VERIFICATION
+###############################################################################
+
+- name: Binary | Verify installed version
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      "{{ nexus_current_link }}/bin/nexus" --version 2>/dev/null \
+        | head -1 \
+        | grep -oP '\d+\.\d+\.\d+' \
+        || echo "unknown"
+    executable: /bin/bash
+  register: _nexus_final_version
+  changed_when: false
+  when: nexus_upgrade_verify_version | bool
+  tags: [nexus, binary, verify]
+
+- name: Binary | Assert version matches target
+  ansible.builtin.assert:
+    that:
+      - _nexus_final_version.stdout == nexus_version
+    fail_msg: >-
+      VERSION_MISMATCH: Expected {{ nexus_version }} but got {{ _nexus_final_version.stdout }}.
+      The installation or upgrade may have failed.
+    success_msg: "Version verified: {{ _nexus_final_version.stdout }}"
+  when: nexus_upgrade_verify_version | bool
+  tags: [nexus, binary, verify]

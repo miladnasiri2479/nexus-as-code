@@ -1,0 +1,109 @@
+---
+- name: Destroy | Display role info
+  ansible.builtin.debug:
+    msg: "Destroying Nexus Repository Manager installation"
+  tags: [nexus, destroy]
+
+- name: Destroy | Assert destruction is confirmed
+  ansible.builtin.assert:
+    that:
+      - nexus_destroy_confirm | default(false) | bool
+    fail_msg: "[DESTROY] ERROR: Set nexus_destroy_confirm: true to proceed."
+  tags: [nexus, destroy, validate]
+
+- name: Destroy | Stop Nexus service (systemd)
+  block:
+    - name: Destroy | Stop service
+      ansible.builtin.systemd:
+        name: "{{ nexus_service_name }}"
+        state: stopped
+  rescue:
+    - name: Destroy | Service may not exist
+      ansible.builtin.debug:
+        msg: "Service not found or already stopped"
+  when:
+    - nexus_destroy_service | bool
+    - nexus_install_method == 'binary'
+  tags: [nexus, destroy, service]
+
+- name: Destroy | Stop Docker container
+  block:
+    - name: Destroy | Remove container
+      community.docker.docker_container:
+        name: "{{ nexus_docker_container_name }}"
+        state: absent
+  rescue:
+    - name: Destroy | Container may not exist
+      ansible.builtin.debug:
+        msg: "Container not found or already removed"
+  when:
+    - nexus_destroy_service | bool
+    - nexus_install_method in ['docker', 'compose']
+  tags: [nexus, destroy, docker]
+
+- name: Destroy | Remove installation directory
+  ansible.builtin.file:
+    path: "{{ nexus_install_dir }}"
+    state: absent
+  when: nexus_destroy_install_dir | bool
+  tags: [nexus, destroy, files]
+
+- name: Destroy | Remove data directory
+  ansible.builtin.file:
+    path: "{{ nexus_data_dir }}"
+    state: absent
+  when: nexus_destroy_data_dir | bool
+  tags: [nexus, destroy, files]
+
+- name: Destroy | Remove systemd unit
+  ansible.builtin.file:
+    path: /etc/systemd/system/nexus.service
+    state: absent
+  when:
+    - nexus_destroy_config | bool
+    - nexus_install_method == 'binary'
+  tags: [nexus, destroy, config]
+
+- name: Destroy | Remove environment file
+  ansible.builtin.file:
+    path: /etc/default/nexus
+    state: absent
+  when: nexus_destroy_config | bool
+  tags: [nexus, destroy, config]
+
+- name: Destroy | Remove log directory
+  ansible.builtin.file:
+    path: /var/log/nexus
+    state: absent
+  when: nexus_destroy_logs | bool
+  tags: [nexus, destroy, logs]
+
+- name: Destroy | Remove backup directory
+  ansible.builtin.file:
+    path: "{{ nexus_backup_dir }}"
+    state: absent
+  when: nexus_destroy_backup | bool
+  tags: [nexus, destroy, backup]
+
+- name: Destroy | Remove nexus user
+  ansible.builtin.user:
+    name: "{{ nexus_runas_user }}"
+    state: absent
+    remove: true
+  when: nexus_destroy_user | bool
+  tags: [nexus, destroy, user]
+
+- name: Destroy | Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: nexus_install_method == 'binary'
+  tags: [nexus, destroy, systemd]
+
+- name: Destroy | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[DESTROY] Destruction Complete"
+      - "  Service stopped: {{ nexus_destroy_service }}"
+      - "  Install dir removed: {{ nexus_destroy_install_dir }}"
+      - "  Data dir removed: {{ nexus_destroy_data_dir }}"
+  tags: [nexus, destroy, summary]

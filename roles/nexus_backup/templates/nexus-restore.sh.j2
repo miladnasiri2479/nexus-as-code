@@ -1,0 +1,124 @@
+#!/bin/bash
+# =============================================================================
+# Nexus Repository Manager — Restore Script
+# Managed by Ansible — DO NOT EDIT MANUALLY
+# Role: nexus_backup
+# =============================================================================
+
+set -euo pipefail
+
+BACKUP_DIR="{{ nexus_backup_dir }}"
+DATA_DIR="{{ nexus_data_dir }}"
+TEMP_DIR="{{ nexus_backup_temp_dir }}"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+usage() {
+    echo "Usage: $0 <backup-file.tar.gz>"
+    echo ""
+    echo "Available backups:"
+    ls -1 "${BACKUP_DIR}"/nexus-backup-*.tar.gz 2>/dev/null || echo "  No backups found"
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    usage
+fi
+
+BACKUP_FILE="$1"
+
+if [ ! -f "${BACKUP_FILE}" ]; then
+    log "ERROR: Backup file not found: ${BACKUP_FILE}"
+    exit 1
+fi
+
+# ── Verify Checksum ──
+log "Verifying checksum..."
+CHECKSUM_FILE="${BACKUP_FILE}.sha256"
+if [ -f "${CHECKSUM_FILE}" ]; then
+    sha256sum -c "${CHECKSUM_FILE}" || { log "ERROR: Checksum verification failed"; exit 1; }
+    log "  Checksum OK"
+else
+    log "  WARNING: No checksum file found"
+fi
+
+# ── Stop Nexus ──
+log "Stopping Nexus service..."
+systemctl stop {{ nexus_service_name }} || true
+sleep 5
+
+# ── Pre-restore Snapshot ──
+log "Creating pre-restore snapshot..."
+PRE_RESTORE_DIR="${TEMP_DIR}/pre-restore-$(date +%Y%m%d_%H%M%S)"
+mkdir -p "${PRE_RESTORE_DIR}"
+cp -a "${DATA_DIR}/etc" "${PRE_RESTORE_DIR}/" 2>/dev/null || true
+log "  Snapshot at: ${PRE_RESTORE_DIR}"
+
+# ── Extract ──
+log "Extracting backup..."
+mkdir -p "${TEMP_DIR}/restore"
+tar -xzf "${BACKUP_FILE}" -C "${TEMP_DIR}/restore"
+RESTORE_NAME=$(tar -tzf "${BACKUP_FILE}" | head -1 | cut -d'/' -f1)
+
+# ── Restore Database ──
+log "Restoring database..."
+if [ -d "${TEMP_DIR}/restore/${RESTORE_NAME}/orient" ]; then
+    rm -rf "${DATA_DIR}/orient"
+    cp -a "${TEMP_DIR}/restore/${RESTORE_NAME}/orient" "${DATA_DIR}/"
+    log "  Database restored"
+else
+    log "  WARNING: No database in backup"
+fi
+
+# ── Restore Configuration ──
+log "Restoring configuration..."
+if [ -d "${TEMP_DIR}/restore/${RESTORE_NAME}/etc" ]; then
+    cp -a "${TEMP_DIR}/restore/${RESTORE_NAME}/etc" "${DATA_DIR}/"
+    log "  Configuration restored"
+else
+    log "  WARNING: No configuration in backup"
+fi
+
+# ── Restore Blob Stores ──
+log "Restoring blob stores..."
+if [ -d "${TEMP_DIR}/restore/${RESTORE_NAME}/blobs" ]; then
+    rsync -a "${TEMP_DIR}/restore/${RESTORE_NAME}/blobs" "${DATA_DIR}/" 2>/dev/null || \
+    cp -a "${TEMP_DIR}/restore/${RESTORE_NAME}/blobs" "${DATA_DIR}/"
+    log "  Blob stores restored"
+else
+    log "  WARNING: No blob stores in backup"
+fi
+
+# ── Set Permissions ──
+log "Setting permissions..."
+chown -R {{ nexus_runas_user }}:{{ nexus_runas_group }} "${DATA_DIR}"
+
+# ── Start Nexus ──
+log "Starting Nexus service..."
+systemctl start {{ nexus_service_name }}
+
+# ── Wait for API ──
+log "Waiting for Nexus API..."
+RETRIES=0
+MAX_RETRIES=30
+until curl -sf "http://localhost:{{ nexus_port | default(8081) }}{{ nexus_context_path | default('/') }}service/rest/v1/status" >/dev/null 2>&1; do
+    RETRIES=$((RETRIES + 1))
+    if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+        log "ERROR: Nexus API not responding after ${MAX_RETRIES} attempts"
+        exit 1
+    fi
+    sleep 10
+done
+log "  Nexus API is responding"
+
+# ── Cleanup ──
+log "Cleaning up..."
+rm -rf "${TEMP_DIR}/restore" "${TEMP_DIR}/${RESTORE_NAME}"
+
+log "========================================"
+log "Restore completed successfully"
+log "  Backup: ${BACKUP_FILE}"
+log "  Pre-restore snapshot: ${PRE_RESTORE_DIR}"
+log "========================================"

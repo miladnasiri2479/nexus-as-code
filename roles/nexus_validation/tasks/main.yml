@@ -1,0 +1,175 @@
+---
+- name: Validation | Display role info
+  ansible.builtin.debug:
+    msg: "Running Nexus configuration validation"
+  tags: [validation]
+
+- name: Validation | Initialize error tracking
+  ansible.builtin.set_fact:
+    nexus_validation_errors: []
+    nexus_validation_warnings: []
+  tags: [validation]
+
+- name: Validation | Check for duplicate repositories
+  block:
+    - name: Validation | Build repository name list
+      ansible.builtin.set_fact:
+        _repo_names: "{{ nexus_repos | default([]) | map(attribute='name') | list }}"
+    - name: Validation | Find duplicate repository names
+      ansible.builtin.set_fact:
+        _duplicate_repos: "{{ _repo_names | difference(_repo_names | unique) | unique }}"
+    - name: Validation | Report duplicate repositories
+      ansible.builtin.set_fact:
+        nexus_validation_errors: "{{ nexus_validation_errors + ['DUPLICATE_REPOSITORY: ' + (_duplicate_repos | join(', '))] }}"
+      when: _duplicate_repos | length > 0
+  when: nexus_validation_check_duplicate_repos
+  tags: [validation, duplicates]
+
+- name: Validation | Check for duplicate blob stores
+  block:
+    - name: Validation | Build blobstore name list
+      ansible.builtin.set_fact:
+        _bs_names: "{{ nexus_blobstores | default([]) | map(attribute='name') | list }}"
+    - name: Validation | Find duplicate blobstore names
+      ansible.builtin.set_fact:
+        _duplicate_bs: "{{ _bs_names | difference(_bs_names | unique) | unique }}"
+    - name: Validation | Report duplicate blobstores
+      ansible.builtin.set_fact:
+        nexus_validation_errors: "{{ nexus_validation_errors + ['DUPLICATE_BLOBSTORE: ' + (_duplicate_bs | join(', '))] }}"
+      when: _duplicate_bs | length > 0
+  when: nexus_validation_check_duplicate_blobstores
+  tags: [validation, duplicates]
+
+- name: Validation | Check for duplicate MinIO bucket names
+  block:
+    - name: Validation | Build bucket name list
+      ansible.builtin.set_fact:
+        _bucket_names: "{{ nexus_minio_buckets | default([]) | map(attribute='name') | list }}"
+    - name: Validation | Find duplicate bucket names
+      ansible.builtin.set_fact:
+        _duplicate_buckets: "{{ _bucket_names | difference(_bucket_names | unique) | unique }}"
+    - name: Validation | Report duplicate buckets
+      ansible.builtin.set_fact:
+        nexus_validation_errors: "{{ nexus_validation_errors + ['DUPLICATE_BUCKET: ' + (_duplicate_buckets | join(', '))] }}"
+      when: _duplicate_buckets | length > 0
+  when: nexus_validation_check_duplicate_buckets and nexus_minio_enabled | default(false)
+  tags: [validation, duplicates]
+
+- name: Validation | Check admin password is set
+  ansible.builtin.assert:
+    that:
+      - nexus_admin_password | default('') | length > 0
+    fail_msg: "MISSING_CREDENTIAL: nexus_admin_password is empty."
+  when: nexus_validation_check_admin_password
+  tags: [validation, credentials]
+
+- name: Validation | Check S3 credentials
+  block:
+    - name: Validation | Assert S3 access key is set
+      ansible.builtin.assert:
+        that:
+          - nexus_s3_access_key_id | default('') | length > 0
+        fail_msg: "MISSING_CREDENTIAL: S3 access_key_id is empty."
+      when: nexus_storage_type == 's3'
+    - name: Validation | Assert S3 secret key is set
+      ansible.builtin.assert:
+        that:
+          - nexus_s3_secret_access_key | default('') | length > 0
+        fail_msg: "MISSING_CREDENTIAL: S3 secret_access_key is empty."
+      when: nexus_storage_type == 's3'
+  when: nexus_validation_check_s3_credentials
+  tags: [validation, credentials]
+
+- name: Validation | Check LDAP credentials
+  block:
+    - name: Validation | Assert LDAP bind DN is set
+      ansible.builtin.assert:
+        that:
+          - nexus_ldap.bind_dn | default('') | length > 0
+        fail_msg: "MISSING_CREDENTIAL: LDAP bind_dn is empty."
+    - name: Validation | Assert LDAP bind password is set
+      ansible.builtin.assert:
+        that:
+          - nexus_ldap.bind_password | default('') | length > 0
+        fail_msg: "MISSING_CREDENTIAL: LDAP bind_password is empty."
+  when: nexus_validation_check_ldap_credentials and nexus_ldap_enabled | default(false)
+  tags: [validation, credentials]
+
+- name: Validation | Check proxy host
+  ansible.builtin.assert:
+    that:
+      - nexus_http_proxy_host | default('') | length > 0
+    fail_msg: "MISSING_PROXY: nexus_proxy_enabled but no proxy host configured."
+  when:
+    - nexus_validation_check_proxy_host
+    - nexus_proxy_enabled | default(false)
+  tags: [validation, proxy]
+
+- name: Validation | Check file storage path
+  ansible.builtin.assert:
+    that:
+      - nexus_storage_type == 's3' or nexus_storage_type == 'file'
+    fail_msg: "UNSUPPORTED_STORAGE: nexus_storage_type must be 'file' or 's3'."
+  when: nexus_validation_check_storage_types
+  tags: [validation, storage]
+
+- name: Validation | Check supported repository formats
+  block:
+    - name: Validation | Define supported formats
+      ansible.builtin.set_fact:
+        _supported_formats: [maven2, docker, npm, pypi, helm, raw, go, nuget, yum, apt, conan, cocoapods, r, rubygems, composer, gitlfs]
+    - name: Validation | Find unsupported formats
+      ansible.builtin.set_fact:
+        _unsupported_formats: "{{ nexus_repos | default([]) | map(attribute='format') | select('not in', _supported_formats) | unique | list }}"
+    - name: Validation | Report unsupported formats
+      ansible.builtin.set_fact:
+        nexus_validation_errors: "{{ nexus_validation_errors + ['UNSUPPORTED_FORMAT: ' + (_unsupported_formats | join(', '))] }}"
+      when: _unsupported_formats | length > 0
+  when: nexus_validation_check_repo_formats
+  tags: [validation, formats]
+
+- name: Validation | Check cleanup policy age units
+  block:
+    - name: Validation | Define valid age units
+      ansible.builtin.set_fact:
+        _valid_age_units: [minutes, hours, days, weeks, months]
+    - name: Validation | Find invalid age units
+      ansible.builtin.set_fact:
+        _invalid_age_units: "{{ nexus_cleanup_policies | default([]) | selectattr('age_unit', 'defined') | selectattr('age_unit', 'not in', _valid_age_units) | map(attribute='name') | list }}"
+    - name: Validation | Report invalid age units
+      ansible.builtin.set_fact:
+        nexus_validation_errors: "{{ nexus_validation_errors + ['INVALID_CLEANUP: ' + (_invalid_age_units | join(', '))] }}"
+      when: _invalid_age_units | length > 0
+  when: nexus_validation_check_cleanup_age_units
+  tags: [validation, cleanup]
+
+- name: Validation | Display validation results
+  ansible.builtin.debug:
+    msg:
+      - "[VALIDATION] Results"
+      - "Errors: {{ nexus_validation_errors | length }}"
+      - "Warnings: {{ nexus_validation_warnings | length }}"
+  tags: [validation, report]
+
+- name: Validation | Display errors
+  ansible.builtin.debug:
+    msg: "ERROR: {{ item }}"
+  loop: "{{ nexus_validation_errors }}"
+  loop_control:
+    label: "{{ item[:80] }}..."
+  when: nexus_validation_errors | length > 0
+  tags: [validation, report]
+
+- name: Validation | Fail on errors
+  ansible.builtin.fail:
+    msg: "[VALIDATION] FAILED with {{ nexus_validation_errors | length }} error(s): {{ nexus_validation_errors | join(', ') }}"
+  when:
+    - nexus_validation_fail_on_error
+    - nexus_validation_errors | length > 0
+  tags: [validation, report]
+
+- name: Validation | Display success
+  ansible.builtin.debug:
+    msg: "[VALIDATION] PASSED — no errors found"
+  when: nexus_validation_errors | length == 0
+  tags: [validation, report]

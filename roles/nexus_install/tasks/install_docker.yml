@@ -1,0 +1,263 @@
+---
+###############################################################################
+# nexus_install — tasks/install_docker.yml
+#
+# Docker Compose installation: docker-compose.yml, volumes, health check.
+# All tasks are idempotent — safe to run multiple times.
+###############################################################################
+
+###############################################################################
+# PRE-FLIGHT CHECKS
+###############################################################################
+
+- name: Docker | Assert required variables
+  ansible.builtin.assert:
+    that:
+      - nexus_version | default('') | length > 0
+      - nexus_port | default(0) | int > 0
+      - nexus_docker_image | default('') | length > 0
+    fail_msg: >-
+      MISSING_VARIABLE: nexus_version, nexus_port, and nexus_docker_image are required for Docker mode.
+      Check your group_vars/nexus.yml file.
+  tags: [nexus, docker, validate]
+
+###############################################################################
+# DOCKER PREREQUISITES
+###############################################################################
+
+- name: Docker | Ensure Docker is installed
+  ansible.builtin.command: docker --version
+  register: _docker_version
+  changed_when: false
+  failed_when: false
+  tags: [nexus, docker, prereq]
+
+- name: Docker | Fail if Docker not installed
+  ansible.builtin.fail:
+    msg: >-
+      DOCKER_NOT_FOUND: Docker is not installed on this host.
+      Install Docker before using nexus_install_method: docker.
+      See: https://docs.docker.com/engine/install/
+  when: _docker_version.rc | default(1) != 0
+  tags: [nexus, docker, prereq]
+
+- name: Docker | Ensure Docker Compose is available
+  ansible.builtin.command: docker compose version
+  register: _compose_version
+  changed_when: false
+  failed_when: false
+  tags: [nexus, docker, prereq]
+
+- name: Docker | Fail if Docker Compose not available
+  ansible.builtin.fail:
+    msg: >-
+      DOCKER_COMPOSE_NOT_FOUND: Docker Compose plugin is not available.
+      Install Docker Compose before using nexus_install_method: docker.
+      See: https://docs.docker.com/compose/install/
+  when: _compose_version.rc | default(1) != 0
+  tags: [nexus, docker, prereq]
+
+- name: Docker | Display Docker version
+  ansible.builtin.debug:
+    msg: "Docker: {{ _docker_version.stdout }} | Compose: {{ _compose_version.stdout }}"
+  tags: [nexus, docker, prereq]
+
+###############################################################################
+# DETECT CURRENT STATE
+###############################################################################
+
+- name: Docker | Check if container exists
+  community.docker.docker_container_info:
+    name: "{{ nexus_docker_container_name }}"
+  register: _nexus_container_info
+  ignore_errors: true
+  tags: [nexus, docker, detect]
+
+- name: Docker | Get container image tag
+  ansible.builtin.set_fact:
+    _nexus_container_exists: "{{ _nexus_container_info is succeeded and _nexus_container_info.exists | default(false) }}"
+    _nexus_container_image_tag: "{{ _nexus_container_info.container.Config.Image | default('none') }}"
+  tags: [nexus, docker, detect]
+
+- name: Docker | Determine if upgrade needed
+  ansible.builtin.set_fact:
+    _nexus_docker_needs_upgrade: >-
+      {{ _nexus_container_exists and
+         _nexus_container_image_tag != (nexus_docker_image ~ ':' ~ nexus_docker_tag) }}
+    _nexus_docker_needs_create: "{{ not _nexus_container_exists }}"
+  tags: [nexus, docker, detect]
+
+- name: Docker | Display container state
+  ansible.builtin.debug:
+    msg: >-
+      Container exists: {{ _nexus_container_exists }} |
+      Current image: {{ _nexus_container_image_tag }} |
+      Target image: {{ nexus_docker_image }}:{{ nexus_docker_tag }} |
+      Needs upgrade: {{ _nexus_docker_needs_upgrade }} |
+      Needs create: {{ _nexus_docker_needs_create }}
+  tags: [nexus, docker, detect]
+
+###############################################################################
+# BACKUP (for upgrade)
+###############################################################################
+
+- name: Docker | Backup before upgrade
+  ansible.builtin.include_role:
+    name: nexus_backup
+    tasks_from: main.yml
+  when:
+    - _nexus_docker_needs_upgrade
+    - nexus_upgrade_backup_before
+  tags: [nexus, docker, backup]
+
+###############################################################################
+# CREATE DIRECTORIES
+###############################################################################
+
+- name: Docker | Create Compose directory
+  ansible.builtin.file:
+    path: "{{ nexus_docker_compose_dir }}"
+    state: directory
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  tags: [nexus, docker, dirs]
+
+- name: Docker | Create data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  loop:
+    - "{{ nexus_data_dir }}"
+    - "{{ nexus_data_dir }}/data"
+    - "{{ nexus_data_dir }}/logs"
+  tags: [nexus, docker, dirs]
+
+###############################################################################
+# STOP OLD CONTAINER (for upgrade)
+###############################################################################
+
+- name: Docker | Stop old container (upgrade)
+  community.docker.docker_container:
+    name: "{{ nexus_docker_container_name }}"
+    state: absent
+  when:
+    - _nexus_docker_needs_upgrade
+  tags: [nexus, docker, upgrade]
+
+###############################################################################
+# GENERATE DOCKER COMPOSE FILE
+###############################################################################
+
+- name: Docker | Write docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ nexus_docker_compose_file }}"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0644"
+  register: _compose_file_result
+  tags: [nexus, docker, compose]
+
+###############################################################################
+# PULL IMAGE
+###############################################################################
+
+- name: Docker | Pull Nexus image
+  community.docker.docker_image:
+    name: "{{ nexus_docker_image }}:{{ nexus_docker_tag }}"
+    source: pull
+    force_source: "{{ _nexus_docker_needs_upgrade }}"
+  tags: [nexus, docker, pull]
+
+###############################################################################
+# START CONTAINER
+###############################################################################
+
+- name: Docker | Start Nexus container
+  community.docker.docker_compose:
+    project_src: "{{ nexus_docker_compose_dir }}"
+    project_name: "{{ nexus_docker_compose_project }}"
+    files:
+      - docker-compose.yml
+    state: present
+  register: _compose_result
+  tags: [nexus, docker, start]
+
+- name: Docker | Display compose result
+  ansible.builtin.debug:
+    var: _compose_result
+  tags: [nexus, docker, start]
+
+###############################################################################
+# WAIT FOR API
+###############################################################################
+
+- name: Docker | Wait for Nexus API
+  ansible.builtin.uri:
+    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}{{ nexus_api_health_path }}"
+    method: GET
+    timeout: "{{ nexus_api_timeout }}"
+    status_code: "{{ nexus_api_expected_status }}"
+  register: _nexus_api_check
+  until: _nexus_api_check.status == nexus_api_expected_status
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_delay }}"
+  when: nexus_wait_for_api
+  tags: [nexus, docker, verify]
+
+- name: Docker | Display API status
+  ansible.builtin.debug:
+    msg: "Nexus API is responding (HTTP {{ _nexus_api_check.status | default('N/A') }})"
+  when: nexus_wait_for_api
+  tags: [nexus, docker, verify]
+
+###############################################################################
+# HEALTH CHECK
+###############################################################################
+
+- name: Docker | Verify container is healthy
+  community.docker.docker_container_info:
+    name: "{{ nexus_docker_container_name }}"
+  register: _container_health
+  when: nexus_docker_healthcheck_enabled
+  tags: [nexus, docker, health]
+
+- name: Docker | Display container health
+  ansible.builtin.debug:
+    msg: >-
+      Container: {{ _container_health.container.State.Status | default('unknown') }} |
+      Running: {{ _container_health.container.State.Running | default(false) }} |
+      Health: {{ _container_health.container.State.Health.Status | default('no healthcheck') }}
+  when:
+    - nexus_docker_healthcheck_enabled
+    - _container_health is succeeded
+  tags: [nexus, docker, health]
+
+###############################################################################
+# VERSION VERIFICATION
+###############################################################################
+
+- name: Docker | Verify container image version
+  community.docker.docker_container_info:
+    name: "{{ nexus_docker_container_name }}"
+  register: _container_version
+  when: nexus_upgrade_verify_version
+  tags: [nexus, docker, verify]
+
+- name: Docker | Assert image matches target
+  ansible.builtin.assert:
+    that:
+      - _container_version.container.Config.Image == (nexus_docker_image ~ ':' ~ nexus_docker_tag)
+    fail_msg: >-
+      VERSION_MISMATCH: Expected {{ nexus_docker_image }}:{{ nexus_docker_tag }} but got
+      {{ _container_version.container.Config.Image | default('unknown') }}.
+      The image pull or container creation may have failed.
+    success_msg: "Image verified: {{ nexus_docker_image }}:{{ nexus_docker_tag }}"
+  when:
+    - nexus_upgrade_verify_version
+    - _container_version is succeeded
+  tags: [nexus, docker, verify]

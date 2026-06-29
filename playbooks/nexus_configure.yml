@@ -1,0 +1,37 @@
+---
+###############################################################################
+# Nexus as Code - Configure Only Playbook
+# ============================================================================
+# Apply configuration, repos, security to existing Nexus installation.
+#
+# Usage:
+#   ansible-playbook -i inventories/production/inventory.yml playbooks/nexus_configure.yml
+###############################################################################
+
+- name: Configure Nexus Repository Manager
+  hosts: nexus
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: nexus_config
+      tags: [nexus, config]
+
+    - role: nexus_blobstores
+      tags: [nexus, blobstores]
+
+    - role: nexus_repos
+      tags: [nexus, repos]
+
+    - role: nexus_repos_groups
+      tags: [nexus, repo-groups]
+
+    - role: nexus_cleanup
+      tags: [nexus, cleanup]
+
+    - role: nexus_security
+      tags: [nexus, security]
+
+    - role: nexus_proxy
+      when: nexus_proxy_enabled | default(false)
+      tags: [nexus, proxy]

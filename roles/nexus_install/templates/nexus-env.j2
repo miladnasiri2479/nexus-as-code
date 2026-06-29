@@ -1,0 +1,11 @@
+# Nexus Repository Manager Environment Configuration
+# Managed by Ansible — DO NOT EDIT MANUALLY
+# Role: nexus_install
+
+NEXUS_HOME="{{ nexus_current_link }}"
+NEXUS_DATA="{{ nexus_data_dir }}"
+NEXUS_TEMP="{{ nexus_temp_dir }}"
+NEXUS_WORK_DIR="{{ nexus_work_dir }}"
+RUN_AS_USER="{{ nexus_runas_user }}"
+RUN_AS_GROUP="{{ nexus_runas_group }}"
+JAVA_HOME="{{ java_home | default('/usr/lib/jvm/java-17-openjdk') }}"

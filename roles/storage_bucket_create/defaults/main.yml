@@ -1,0 +1,15 @@
+---
+nexus_buckets: []
+nexus_bucket_prefix: ""
+nexus_bucket_versioning_default: false
+nexus_bucket_lifecycle_default: []
+nexus_minio_endpoint: "http://localhost:{{ nexus_minio_port | default(9000) }}"
+nexus_minio_access_key: ""
+nexus_minio_secret_key: ""
+nexus_minio_alias: nexus
+nexus_s3_access_key_id: ""
+nexus_s3_secret_access_key: ""
+nexus_s3_region: us-east-1
+nexus_storage_type: file
+nexus_storage_minio:
+  enabled: false

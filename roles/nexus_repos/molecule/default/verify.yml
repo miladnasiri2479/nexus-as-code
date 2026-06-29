@@ -1,0 +1,51 @@
+---
+- name: Verify nexus_repos role
+  hosts: all
+  become: true
+  tasks:
+    - name: Verify defaults are set
+      ansible.builtin.assert:
+        that:
+          - nexus_admin_user == "admin"
+          - nexus_port == 8081
+          - nexus_repos_delete_unmanaged == false
+          - nexus_api_retries == 3
+          - nexus_api_retry_delay == 5
+          - nexus_repo_valid_formats | length >= 16
+          - nexus_repo_valid_types | length == 3
+        success_msg: "All defaults verified"
+        fail_msg: "Default verification failed"
+      tags: [verify]
+
+    - name: Verify computed URLs
+      ansible.builtin.assert:
+        that:
+          - "'http://' in nexus_api_base_url"
+          - "'8081' in nexus_api_base_url"
+          - "'service/rest/v1' in nexus_api_base_url"
+          - "'repositories' in nexus_repos_list_url"
+          - "'repositories' in nexus_repos_create_url"
+        success_msg: "All computed URLs verified"
+        fail_msg: "URL verification failed"
+      tags: [verify]
+
+    - name: Verify valid formats
+      ansible.builtin.assert:
+        that:
+          - "'maven2' in nexus_repo_valid_formats"
+          - "'docker' in nexus_repo_valid_formats"
+          - "'npm' in nexus_repo_valid_formats"
+          - "'pypi' in nexus_repo_valid_formats"
+        success_msg: "Valid formats verified"
+        fail_msg: "Formats verification failed"
+      tags: [verify]
+
+    - name: Verify valid types
+      ansible.builtin.assert:
+        that:
+          - "'hosted' in nexus_repo_valid_types"
+          - "'proxy' in nexus_repo_valid_types"
+          - "'virtual' in nexus_repo_valid_types"
+        success_msg: "Valid types verified"
+        fail_msg: "Types verification failed"
+      tags: [verify]

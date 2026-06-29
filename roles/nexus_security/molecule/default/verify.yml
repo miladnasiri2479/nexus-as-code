@@ -1,0 +1,42 @@
+---
+- name: Verify nexus_security role
+  hosts: all
+  become: true
+  tasks:
+    - name: Verify defaults are set
+      ansible.builtin.assert:
+        that:
+          - nexus_admin_user == "admin"
+          - nexus_port == 8081
+          - nexus_anonymous_access_enabled == false
+          - nexus_ssl_enabled == false
+          - nexus_security_force_ssl == false
+          - nexus_api_retries == 3
+          - nexus_api_retry_delay == 5
+        success_msg: "All defaults verified"
+        fail_msg: "Default verification failed"
+      tags: [verify]
+
+    - name: Verify computed URLs
+      ansible.builtin.assert:
+        that:
+          - "'http://' in nexus_api_base_url"
+          - "'8081' in nexus_api_base_url"
+          - "'service/rest/v1' in nexus_api_base_url"
+          - "'security/anonymous' in nexus_security_anonymous_url"
+          - "'security/realms/active' in nexus_security_realms_url"
+          - "'security/sSL' in nexus_security_ssl_url"
+        success_msg: "All computed URLs verified"
+        fail_msg: "URL verification failed"
+      tags: [verify]
+
+    - name: Verify valid realms list
+      ansible.builtin.assert:
+        that:
+          - nexus_valid_realms | length >= 6
+          - "'NexusAuthenticatingRealm' in nexus_valid_realms"
+          - "'NexusAuthoringRealm' in nexus_valid_realms"
+          - "'LdapRealm' in nexus_valid_realms"
+        success_msg: "Valid realms verified"
+        fail_msg: "Realms verification failed"
+      tags: [verify]

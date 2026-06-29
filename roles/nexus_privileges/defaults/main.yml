@@ -1,0 +1,34 @@
+---
+nexus_privileges_validate_format: true
+nexus_privileges_valid_prefixes:
+  - nx-repository-view
+  - nx-repository-admin
+  - nx-security
+  - nx-task
+nexus_privileges_valid_actions:
+  - browse
+  - read
+  - add
+  - edit
+  - delete
+  - "*"
+nexus_roles: []
+nexus_admin_user: admin
+nexus_admin_password: ""
+nexus_validate_certs: true
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_api_scheme: http
+nexus_api_version: v1
+nexus_api_timeout: 30
+nexus_api_retries: 3
+nexus_api_retry_delay: 5
+nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
+nexus_privileges_url: "{{ nexus_api_base_url }}/security/privileges"
+nexus_privileges_run_once: false
+nexus_privileges_delegate_to: ""
+nexus_no_log: true
+nexus_http_proxy: ""
+nexus_https_proxy: ""
+nexus_no_proxy: ""

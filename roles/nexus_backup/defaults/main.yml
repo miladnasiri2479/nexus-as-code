@@ -1,0 +1,31 @@
+---
+nexus_backup_enabled: false
+nexus_backup_dir: /var/nexus/backup
+nexus_backup_temp_dir: /tmp/nexus-backup
+nexus_data_dir: /var/nexus/data
+nexus_backup_retention_days: 30
+nexus_backup_retention_count: 10
+nexus_backup_include_blobs: true
+nexus_backup_include_db: true
+nexus_backup_include_config: true
+nexus_backup_compress: true
+nexus_backup_cron_enabled: false
+nexus_backup_cron_schedule: "0 2 * * *"
+nexus_backup_cron_user: "{{ nexus_runas_user | default('nexus') }}"
+nexus_backup_s3_enabled: false
+nexus_backup_s3_bucket: ""
+nexus_backup_s3_prefix: "nexus-backups"
+nexus_backup_s3_endpoint: ""
+nexus_backup_s3_access_key: ""
+nexus_backup_s3_secret_key: ""
+nexus_backup_nfs_enabled: false
+nexus_backup_nfs_mount: ""
+nexus_backup_notify_enabled: false
+nexus_backup_notify_email: ""
+nexus_backup_notify_webhook: ""
+nexus_runas_user: nexus
+nexus_runas_group: nexus
+nexus_service_name: nexus
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"

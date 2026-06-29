@@ -1,0 +1,139 @@
+---
+- name: Bucket Validate | Display role info
+  ansible.builtin.debug:
+    msg: "Validating {{ nexus_buckets | length }} bucket(s)"
+  tags: [storage, buckets, validate]
+
+- name: Bucket Validate | Initialize error tracking
+  ansible.builtin.set_fact:
+    _bucket_errors: []
+    _bucket_warnings: []
+  tags: [storage, buckets, validate]
+
+- name: Bucket Validate | Check bucket existence
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc ls {{ nexus_minio_alias }}/{{ item.name }}/ >/dev/null 2>&1 && echo "EXISTS" || echo "MISSING"
+    executable: /bin/bash
+  loop: "{{ nexus_buckets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _bucket_exists
+  changed_when: false
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_existence | bool
+    - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, existence]
+
+- name: Bucket Validate | Report missing buckets
+  ansible.builtin.set_fact:
+    _bucket_errors: "{{ _bucket_errors + ['BUCKET_MISSING: ' + item.item.name] }}"
+  loop: "{{ _bucket_exists.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_existence | bool
+    - item.stdout is defined
+    - "'MISSING' in item.stdout"
+  tags: [storage, buckets, existence]
+
+- name: Bucket Validate | Write test file
+  block:
+    - name: Bucket Validate | Write test data
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          echo "nexus-validation-$(date +%s)" | /usr/local/bin/mc pipe {{ nexus_minio_alias }}/{{ item.name }}/{{ nexus_bucket_validate_test_prefix }}test.txt
+        executable: /bin/bash
+      register: _write_test
+      changed_when: true
+  rescue:
+    - name: Bucket Validate | Write test failed
+      ansible.builtin.set_fact:
+        _bucket_errors: "{{ _bucket_errors + ['BUCKET_WRITE_FAILED: ' + item.name] }}"
+  loop: "{{ nexus_buckets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_connectivity | bool
+    - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, connectivity]
+
+- name: Bucket Validate | Cleanup test file
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc rm {{ nexus_minio_alias }}/{{ item.name }}/{{ nexus_bucket_validate_test_prefix }}test.txt 2>/dev/null || true
+    executable: /bin/bash
+  loop: "{{ nexus_buckets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_connectivity | bool
+    - nexus_storage_minio.enabled | default(false)
+  changed_when: false
+  tags: [storage, buckets, connectivity]
+
+- name: Bucket Validate | Check versioning
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc version info {{ nexus_minio_alias }}/{{ item.name }} 2>/dev/null | grep -q "enabled" && echo "ENABLED" || echo "DISABLED"
+    executable: /bin/bash
+  loop: "{{ nexus_buckets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _versioning_check
+  changed_when: false
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_versioning | bool
+    - nexus_storage_minio.enabled | default(false)
+    - item.versioning | default(false) | bool
+  tags: [storage, buckets, versioning]
+
+- name: Bucket Validate | Report versioning mismatch
+  ansible.builtin.set_fact:
+    _bucket_warnings: "{{ _bucket_warnings + ['BUCKET_VERSIONING_MISMATCH: ' + item.item.name] }}"
+  loop: "{{ _versioning_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_bucket_validate_versioning | bool
+    - "'DISABLED' in item.stdout | default('')"
+  tags: [storage, buckets, versioning]
+
+- name: Bucket Validate | Display results
+  ansible.builtin.debug:
+    msg:
+      - "[BUCKET-VALIDATE] Results"
+      - "Errors: {{ _bucket_errors | length }}"
+      - "Warnings: {{ _bucket_warnings | length }}"
+  tags: [storage, buckets, report]
+
+- name: Bucket Validate | Display errors
+  ansible.builtin.debug:
+    msg: "ERROR: {{ item }}"
+  loop: "{{ _bucket_errors }}"
+  when: _bucket_errors | length > 0
+  tags: [storage, buckets, report]
+
+- name: Bucket Validate | Fail on errors
+  ansible.builtin.fail:
+    msg: "[BUCKET-VALIDATE] FAILED: {{ _bucket_errors | join(', ') }}"
+  when:
+    - nexus_bucket_validate_fail_on_error | bool
+    - _bucket_errors | length > 0
+  tags: [storage, buckets, report]
+
+- name: Bucket Validate | Display success
+  ansible.builtin.debug:
+    msg: "[BUCKET-VALIDATE] PASSED"
+  when: _bucket_errors | length == 0
+  tags: [storage, buckets, report]

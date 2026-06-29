@@ -1,0 +1,898 @@
+###############################################################################
+# repositories.yml — Nexus Repository Templates
+# ============================================================================
+# Reference file: defines ALL supported repository types with recipes.
+#
+# This file is NOT directly consumed by Ansible.
+# It serves as a template catalog — users copy entries into their
+# inventory's nexus_repos list (Section 8 of nexus.yml).
+#
+# Each recipe includes every field supported by the Nexus REST API
+# for that format/type combination.
+#
+# How to use:
+#   1. Find the repository type you need below
+#   2. Copy the relevant dict
+#   3. Paste into inventories/<env>/group_vars/nexus.yml → nexus_repos: [...]
+#   4. Customize name, blob_store_name, cleanup_policy, remote_url
+###############################################################################
+
+
+###############################################################################
+# DOCKER
+###############################################################################
+
+# ─── Docker Proxy (Docker Hub) ───────────────────────────────────────────────
+- name: docker-hub
+  # Recipe: standard Docker Hub mirror.
+  # Clients pull through Nexus; cache reduces bandwidth and adds resilience.
+  # Type: string
+  format: docker
+  type: proxy
+  remote_url: https://registry-1.docker.io
+  # Docker Hub v2 registry endpoint.
+  # Type: string
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  compress: true
+  cache_max_age_in_minutes: 1440
+  # Cache TTL in minutes (24 hours). Lower = fresher but more upstream calls.
+  # Type: int
+  index_type: dockerhub
+  # Docker Hub index type.
+  #   dockerhub — public Docker Hub (uses Docker's official index)
+  #   registry  — custom registry (set index_url below)
+  # Type: string
+  index_url: ""
+
+# ─── Docker Proxy (Quay.io) ─────────────────────────────────────────────────
+- name: quay-proxy
+  # Recipe: Red Hat Quay.io container registry mirror.
+  format: docker
+  type: proxy
+  remote_url: https://quay.io
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  compress: true
+  cache_max_age_in_minutes: 1440
+  index_type: registry
+  # Quay uses its own index.
+  index_url: https://quay.io/api/v1
+  # Quay index API endpoint.
+  # Type: string
+
+# ─── Docker Proxy (GitHub Container Registry) ────────────────────────────────
+- name: ghcr-proxy
+  # Recipe: GitHub Container Registry mirror.
+  # Supports both public and private images (with auth token).
+  format: docker
+  type: proxy
+  remote_url: https://ghcr.io
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  compress: true
+  cache_max_age_in_minutes: 1440
+  index_type: registry
+  index_url: https://ghcr.io
+  # GHCR does not expose a public index; Nexus uses the registry directly.
+  # Type: string
+
+# ─── Docker Proxy (Kubernetes Registry) ──────────────────────────────────────
+- name: k8s-registry-proxy
+  # Recipe: Kubernetes official container registry mirror.
+  # Registry: registry.k8s.io
+  format: docker
+  type: proxy
+  remote_url: https://registry.k8s.io
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  compress: true
+  cache_max_age_in_minutes: 1440
+  index_type: registry
+  index_url: https://registry.k8s.io
+
+# ─── Docker Proxy (Red Hat Registry) ────────────────────────────────────────
+- name: redhat-registry-proxy
+  # Recipe: Red Hat Container Registry (registry.redhat.io).
+  # Requires Red Hat subscription authentication.
+  format: docker
+  type: proxy
+  remote_url: https://registry.redhat.io
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  compress: true
+  cache_max_age_in_minutes: 1440
+  index_type: registry
+  index_url: https://registry.redhat.io
+
+# ─── Docker Proxy (Harbor) ──────────────────────────────────────────────────
+- name: harbor-proxy
+  # Recipe: Harbor instance mirror.
+  # Replace remote_url with your Harbor URL.
+  format: docker
+  type: proxy
+  remote_url: https://harbor.internal
+  # Replace with your Harbor URL.
+  # Type: string
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: true
+  # Harbor typically requires auth for pulls.
+  # Type: bool
+  compress: true
+  cache_max_age_in_minutes: 1440
+  index_type: registry
+  index_url: https://harbor.internal
+
+# ─── Docker Proxy (Elastic) ─────────────────────────────────────────────────
+- name: elastic-registry-proxy
+  # Recipe: Elastic container registry mirror.
+  # Registry: docker.elastic.co
+  format: docker
+  type: proxy
+  remote_url: https://docker.elastic.co
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  compress: true
+  cache_max_age_in_minutes: 1440
+  index_type: registry
+  index_url: https://docker.elastic.co
+
+# ─── Docker Hosted ──────────────────────────────────────────────────────────
+- name: docker-hosted
+  # Recipe: private Docker images pushed by your CI/CD or developers.
+  # Clients push here; group routes pulls.
+  format: docker
+  type: hosted
+  write_policy: allow
+  # allow = permit redeploy (Docker tags are mutable).
+  # Type: string
+  blob_store_name: default
+  cleanup_policy: docker-cleanup
+  # Attach a cleanup policy defined in Section 10 of nexus.yml.
+  # Type: string
+  online: true
+  strict_content_validation: false
+  # Docker content validation is lenient by default.
+  # Type: bool
+  v1_enabled: false
+  force_basic_auth: false
+  http_port: 0
+  # 0 = use main Nexus port. Set e.g. 5000 for dedicated Docker port.
+  # Type: int
+  https_port: 0
+  compress: true
+
+# ─── Docker Group ────────────────────────────────────────────────────────────
+- name: docker-group
+  # Recipe: aggregate hosted + proxy repos into a single pull endpoint.
+  # Clients configure this single URL as their Docker registry.
+  format: docker
+  type: virtual
+  # Virtual = group (Nexus 3 uses "virtual" for groups via REST API).
+  # Type: string
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  v1_enabled: false
+  force_basic_auth: false
+  http_port: 0
+  https_port: 0
+  compress: true
+  member_repos:
+    # Ordered: hosted first (private), then proxy (upstream).
+    # First match wins for layer resolution.
+    # Type: list[string]
+    - docker-hosted
+    - docker-hub
+
+
+###############################################################################
+# MAVEN (Java)
+###############################################################################
+
+# ─── Maven Central Proxy ─────────────────────────────────────────────────────
+- name: maven-central
+  # Recipe: official Maven Central mirror.
+  # Caches all public Maven artifacts locally.
+  format: maven2
+  type: proxy
+  remote_url: https://repo1.maven.org/maven2
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  version_policy: release
+  # "release" = stable releases only.
+  # Type: string
+  layout_policy: permissive
+  # "permissive" = accept any layout (proxy should not enforce).
+  # Type: string
+  cache_max_age_in_minutes: 1440
+
+# ─── Maven Central (UK Mirror) ──────────────────────────────────────────────
+- name: maven-central-uk
+  # Recipe: UK mirror of Maven Central (faster for European deployments).
+  format: maven2
+  type: proxy
+  remote_url: https://uk.maven.org/maven2
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  version_policy: release
+  layout_policy: permissive
+  cache_max_age_in_minutes: 1440
+
+# ─── Google Maven Proxy ──────────────────────────────────────────────────────
+- name: google-maven
+  # Recipe: Google's Maven repository (Android, Firebase, etc.).
+  format: maven2
+  type: proxy
+  remote_url: https://maven.google.com
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  version_policy: release
+  layout_policy: permissive
+  cache_max_age_in_minutes: 1440
+
+# ─── Maven Hosted (Releases) ────────────────────────────────────────────────
+- name: maven-releases
+  # Recipe: internal releases. Each version deployed once.
+  format: maven2
+  type: hosted
+  write_policy: allow_once
+  # allow_once = immutable releases.
+  # Type: string
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  version_policy: release
+  layout_policy: strict
+  # strict = enforce proper Maven layout.
+  # Type: string
+
+# ─── Maven Hosted (Snapshots) ───────────────────────────────────────────────
+- name: maven-snapshots
+  # Recipe: internal snapshots. Redeploys allowed.
+  format: maven2
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: maven-snapshot-cleanup
+  online: true
+  strict_content_validation: false
+  version_policy: snapshot
+  layout_policy: permissive
+
+# ─── Maven Group ─────────────────────────────────────────────────────────────
+- name: maven-public
+  # Recipe: aggregate all Maven repos into one endpoint.
+  format: maven2
+  type: virtual
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  version_policy: release
+  layout_policy: permissive
+  member_repos:
+    - maven-releases
+    - maven-snapshots
+    - maven-central
+
+
+###############################################################################
+# NPM (Node.js)
+###############################################################################
+
+# ─── NPM Proxy (Public Registry) ────────────────────────────────────────────
+- name: npm-proxy
+  # Recipe: official npmjs.org mirror.
+  format: npm
+  type: proxy
+  remote_url: https://registry.npmjs.org
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── NPM Hosted ─────────────────────────────────────────────────────────────
+- name: npm-hosted
+  # Recipe: private npm packages.
+  format: npm
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: npm-cleanup
+  online: true
+  strict_content_validation: true
+
+# ─── NPM Group ───────────────────────────────────────────────────────────────
+- name: npm-group
+  # Recipe: aggregate hosted + proxy.
+  format: npm
+  type: virtual
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  member_repos:
+    - npm-hosted
+    - npm-proxy
+
+
+###############################################################################
+# PYPI (Python)
+###############################################################################
+
+# ─── PyPI Proxy ──────────────────────────────────────────────────────────────
+- name: pypi-proxy
+  # Recipe: official PyPI mirror.
+  format: pypi
+  type: proxy
+  remote_url: https://pypi.org/simple
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── PyPI Hosted ────────────────────────────────────────────────────────────
+- name: pypi-hosted
+  # Recipe: private Python packages.
+  format: pypi
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: pypi-cleanup
+  online: true
+  strict_content_validation: true
+
+# ─── PyPI Group ──────────────────────────────────────────────────────────────
+- name: pypi-group
+  # Recipe: aggregate hosted + proxy.
+  format: pypi
+  type: virtual
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  member_repos:
+    - pypi-hosted
+    - pypi-proxy
+
+
+###############################################################################
+# HELM (Kubernetes)
+###############################################################################
+
+# ─── Helm Proxy (Bitnami) ───────────────────────────────────────────────────
+- name: helm-bitnami-proxy
+  # Recipe: Bitnami Helm charts mirror.
+  format: helm
+  type: proxy
+  remote_url: https://charts.bitnami.com/bitnami
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── Helm Proxy (Stable) ────────────────────────────────────────────────────
+- name: helm-stable-proxy
+  # Recipe: official Helm stable charts (deprecated upstream but still used).
+  format: helm
+  type: proxy
+  remote_url: https://charts.helm.sh/stable
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── Helm Hosted ────────────────────────────────────────────────────────────
+- name: helm-hosted
+  # Recipe: internal Helm charts.
+  format: helm
+  type: hosted
+  write_policy: allow_once
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  allow_redeploy: false
+  # Type: bool
+
+# ─── Helm Group ──────────────────────────────────────────────────────────────
+- name: helm-group
+  # Recipe: aggregate all Helm repos.
+  format: helm
+  type: virtual
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  member_repos:
+    - helm-hosted
+    - helm-stable-proxy
+    - helm-bitnami-proxy
+
+
+###############################################################################
+# NUGET (.NET)
+###############################################################################
+
+# ─── NuGet Proxy ────────────────────────────────────────────────────────────
+- name: nuget-proxy
+  # Recipe: official NuGet.org mirror.
+  format: nuget
+  type: proxy
+  remote_url: https://api.nuget.org/v3/index.json
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── NuGet Hosted ───────────────────────────────────────────────────────────
+- name: nuget-hosted
+  # Recipe: private .NET packages.
+  format: nuget
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+
+# ─── NuGet Group ─────────────────────────────────────────────────────────────
+- name: nuget-group
+  format: nuget
+  type: virtual
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  member_repos:
+    - nuget-hosted
+    - nuget-proxy
+
+
+###############################################################################
+# APT (Debian/Ubuntu)
+###############################################################################
+
+# ─── APT Proxy (Ubuntu) ─────────────────────────────────────────────────────
+- name: ubuntu-proxy
+  # Recipe: Ubuntu APT repository mirror.
+  format: apt
+  type: proxy
+  remote_url: https://archive.ubuntu.com/ubuntu
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  distribution: focal
+  # Ubuntu codename: focal, jammy, noble, etc.
+  # Type: string
+  signing:
+    # GPG signing configuration for APT repos.
+    # Type: dict
+    key:
+      # Path to GPG public key file.
+      # Type: string
+      publicKey: ""
+    # Path to GPG private key file for signing.
+    # Type: string
+    publicKeyring: ""
+
+# ─── APT Proxy (Debian) ────────────────────────────────────────────────────
+- name: debian-proxy
+  # Recipe: Debian APT repository mirror.
+  format: apt
+  type: proxy
+  remote_url: https://deb.debian.org/debian
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  distribution: bookworm
+  # Debian codename: bookworm, bullseye, etc.
+  # Type: string
+  signing:
+    key:
+      publicKey: ""
+
+# ─── APT Hosted ─────────────────────────────────────────────────────────────
+- name: apt-hosted
+  # Recipe: internal Debian/Ubuntu packages.
+  format: apt
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  distribution: focal
+  signing:
+    key:
+      publicKey: ""
+
+
+###############################################################################
+# YUM (RHEL/CentOS)
+###############################################################################
+
+# ─── YUM Proxy (CentOS) ────────────────────────────────────────────────────
+- name: centos-proxy
+  # Recipe: CentOS BaseOS/Updates mirror.
+  format: yum
+  type: proxy
+  remote_url: https://mirror.centos.org/centos/8/BaseOS/x86_64/os/
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  deploy_policy: permissive
+  #   permissive — accept any RPM
+  #   strict     — validate against repo metadata
+  # Type: string
+  repodata_depth: 1
+  # Depth to fetch repodata (1 = top-level only).
+  # Type: int
+
+# ─── YUM Proxy (EPEL) ──────────────────────────────────────────────────────
+- name: epel-proxy
+  # Recipe: EPEL (Extra Packages for Enterprise Linux) mirror.
+  format: yum
+  type: proxy
+  remote_url: https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  deploy_policy: permissive
+  repodata_depth: 1
+
+# ─── YUM Proxy (Fedora) ────────────────────────────────────────────────────
+- name: fedora-proxy
+  # Recipe: Fedora RPM repository mirror.
+  format: yum
+  type: proxy
+  remote_url: https://dl.fedoraproject.org/pub/fedora/linux/releases/39/Everything/x86_64/os/
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  deploy_policy: permissive
+  repodata_depth: 1
+
+# ─── YUM Hosted ────────────────────────────────────────────────────────────
+- name: yum-hosted
+  # Recipe: internal RPM packages (custom builds).
+  format: yum
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  deploy_policy: permissive
+  repodata_depth: 1
+
+
+###############################################################################
+# RAW
+###############################################################################
+
+# ─── Raw Hosted ─────────────────────────────────────────────────────────────
+- name: raw-hosted
+  # Recipe: generic file storage (scripts, binaries, configs).
+  # Content accessed via: http://nexus:8081/repository/raw-hosted/{path}
+  format: raw
+  type: hosted
+  write_policy: allow_once
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+
+# ─── Raw Proxy ──────────────────────────────────────────────────────────────
+- name: raw-proxy
+  # Recipe: mirror arbitrary file servers.
+  format: raw
+  type: proxy
+  remote_url: https://releases.example.com
+  # Replace with your file server URL.
+  # Type: string
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+  cache_max_age_in_minutes: 1440
+
+
+###############################################################################
+# GO (Golang)
+###############################################################################
+
+# ─── Go Proxy (Official) ────────────────────────────────────────────────────
+- name: go-proxy-official
+  # Recipe: official Go module proxy (proxy.golang.org).
+  format: go
+  type: proxy
+  remote_url: https://proxy.golang.org
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── Go Proxy (GoCenter) ────────────────────────────────────────────────────
+- name: go-gocenter
+  # Recipe: JFrog GoCenter mirror (public Go modules).
+  format: go
+  type: proxy
+  remote_url: https://gocenter.io
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── Go Hosted ──────────────────────────────────────────────────────────────
+- name: go-hosted
+  # Recipe: internal Go modules.
+  format: go
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+
+# ─── Go Group ────────────────────────────────────────────────────────────────
+- name: go-group
+  format: go
+  type: virtual
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  member_repos:
+    - go-hosted
+    - go-proxy-official
+
+
+###############################################################################
+# CONAN (C/C++)
+###############################################################################
+
+# ─── Conan Proxy (Center) ───────────────────────────────────────────────────
+- name: conan-center-proxy
+  # Recipe: official Conan Center Index mirror.
+  format: conan
+  type: proxy
+  remote_url: https://center.conan.io
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── Conan Hosted ───────────────────────────────────────────────────────────
+- name: conan-hosted
+  # Recipe: internal C/C++ packages.
+  format: conan
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+
+
+###############################################################################
+# RUBYGEMS (Ruby)
+###############################################################################
+
+# ─── RubyGems Proxy ─────────────────────────────────────────────────────────
+- name: rubygems-proxy
+  # Recipe: official RubyGems.org mirror.
+  format: rubygems
+  type: proxy
+  remote_url: https://rubygems.org
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── RubyGems Hosted ────────────────────────────────────────────────────────
+- name: rubygems-hosted
+  # Recipe: private Ruby gems.
+  format: rubygems
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+
+
+###############################################################################
+# COMPOSER (PHP)
+###############################################################################
+
+# ─── Composer Proxy ─────────────────────────────────────────────────────────
+- name: composer-proxy
+  # Recipe: official Packagist mirror.
+  format: composer
+  type: proxy
+  remote_url: https://repo.packagist.org
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── Composer Hosted ────────────────────────────────────────────────────────
+- name: composer-hosted
+  # Recipe: private PHP packages.
+  format: composer
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+
+
+###############################################################################
+# GIT LFS
+###############################################################################
+
+# ─── Git LFS Hosted ─────────────────────────────────────────────────────────
+- name: gitlfs-hosted
+  # Recipe: Git Large File Storage backend.
+  # Configure Git to use: http://nexus:8081/repository/gitlfs-hosted/info/lfs
+  format: gitlfs
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: false
+
+
+###############################################################################
+# R (CRAN)
+###############################################################################
+
+# ─── R Proxy (CRAN) ────────────────────────────────────────────────────────
+- name: cran-proxy
+  # Recipe: official CRAN mirror.
+  format: r
+  type: proxy
+  remote_url: https://cran.r-project.org/src/contrib
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+# ─── R Hosted ──────────────────────────────────────────────────────────────
+- name: r-hosted
+  # Recipe: internal R packages.
+  format: r
+  type: hosted
+  write_policy: allow
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+
+
+###############################################################################
+# COCOAPODS (iOS/macOS)
+###############################################################################
+
+# ─── CocoaPods Proxy ────────────────────────────────────────────────────────
+- name: cocoapods-proxy
+  # Recipe: official CocoaPods trunk mirror.
+  format: cocoapods
+  type: proxy
+  remote_url: https://cdn.cocoapods.org
+  blob_store_name: default
+  cleanup_policy: ""
+  online: true
+  strict_content_validation: true
+  cache_max_age_in_minutes: 1440
+
+
+###############################################################################
+# QUICK REFERENCE: SUPPORTED FORMATS
+###############################################################################
+#
+# Format        | Proxy URL Example                                    | Hosted | Group
+# --------------|------------------------------------------------------|--------|------
+# docker        | https://registry-1.docker.io                         | ✅     | ✅
+# maven2        | https://repo1.maven.org/maven2                       | ✅     | ✅
+# npm           | https://registry.npmjs.org                            | ✅     | ✅
+# pypi          | https://pypi.org/simple                               | ✅     | ✅
+# helm          | https://charts.helm.sh/stable                         | ✅     | ✅
+# nuget         | https://api.nuget.org/v3/index.json                   | ✅     | ✅
+# apt           | https://archive.ubuntu.com/ubuntu                     | ✅     | ❌
+# yum           | https://mirror.centos.org/centos/8/...                | ✅     | ❌
+# raw           | (any HTTP file server)                                | ✅     | ❌
+# go            | https://proxy.golang.org                              | ✅     | ✅
+# conan         | https://center.conan.io                               | ✅     | ❌
+# rubygems      | https://rubygems.org                                  | ✅     | ❌
+# composer      | https://repo.packagist.org                            | ✅     | ❌
+# gitlfs        | (N/A — hosted only)                                   | ✅     | ❌
+# r             | https://cran.r-project.org/src/contrib                | ✅     | ❌
+# cocoapods     | https://cdn.cocoapod.org                              | ❌     | ❌
+#
+#
+# QUICK REFERENCE: RECIPE FIELD DEFINITIONS
+#
+# Field                       | Type     | Applies To       | Description
+# ----------------------------|----------|------------------|------------------------------------------
+# name                        | string   | all              | Unique repository name (required)
+# format                      | string   | all              | Package format (required)
+# type                        | string   | all              | hosted | proxy | virtual
+# remote_url                  | string   | proxy            | Upstream URL (required for proxy)
+# blob_store_name             | string   | all              | Target blob store
+# cleanup_policy              | string   | all              | Cleanup policy name
+# online                      | bool     | all              | Accessible to clients
+# strict_content_validation   | bool     | all              | Validate uploads
+# write_policy                | string   | hosted           | allow | allow_once | deny
+# version_policy              | string   | maven2           | release | snapshot
+# layout_policy               | string   | maven2           | strict | permissive
+# cache_max_age_in_minutes    | int      | proxy            | Cache TTL
+# v1_enabled                  | bool     | docker           | Enable Docker V1 API
+# force_basic_auth            | bool     | docker           | Require auth for push
+# http_port                   | int      | docker           | Dedicated HTTP port
+# https_port                  | int      | docker           | Dedicated HTTPS port
+# compress                    | bool     | docker           | Compress layers
+# index_type                  | string   | docker (proxy)   | dockerhub | registry
+# index_url                   | string   | docker (proxy)   | Custom index URL
+# allow_redeploy              | bool     | helm             | Allow chart redeploy
+# deploy_policy               | string   | yum              | permissive | strict
+# repodata_depth              | int      | yum              | Repodata fetch depth
+# distribution                | string   | apt              | Debian/Ubuntu codename
+# signing                     | dict     | apt              | GPG signing config
+# member_repos                | list     | virtual          | Member repository names

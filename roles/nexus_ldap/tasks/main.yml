@@ -1,0 +1,138 @@
+---
+###############################################################################
+# nexus_ldap — tasks/main.yml
+###############################################################################
+
+- name: LDAP | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring LDAP ({{ nexus_ldap.name }})"
+  when: nexus_ldap_enabled
+  tags: [nexus, ldap]
+
+- name: LDAP | Assert LDAP settings
+  ansible.builtin.assert:
+    that:
+      - nexus_ldap.host | default('') | length > 0
+      - nexus_ldap.base_dn | default('') | length > 0
+      - nexus_ldap.bind_dn | default('') | length > 0
+      - nexus_ldap.bind_password | default('') | length > 0
+    fail_msg: "[LDAP] ERROR: LDAP enabled but required fields missing (host, base_dn, bind_dn, bind_password)."
+  when: nexus_ldap_enabled
+  tags: [nexus, ldap, validate]
+
+- name: LDAP | Configure LDAP server
+  ansible.builtin.uri:
+    url: "{{ nexus_ldap_servers_url }}"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ nexus_ldap.name }}"
+      protocol: "{{ nexus_ldap.protocol }}"
+      host: "{{ nexus_ldap.host }}"
+      port: "{{ nexus_ldap.port | int }}"
+      baseDn: "{{ nexus_ldap.base_dn }}"
+      bindDn: "{{ nexus_ldap.bind_dn }}"
+      bindPassword: "{{ nexus_ldap.bind_password }}"
+      userBaseDn: "{{ nexus_ldap.user_base_dn }}"
+      userObjectClass: "{{ nexus_ldap.user_object_class }}"
+      userIdAttribute: "{{ nexus_ldap.user_id_attribute }}"
+      userRealNameAttribute: "{{ nexus_ldap.user_real_name_attribute }}"
+      userEmailAddressAttribute: "{{ nexus_ldap.user_email_attribute }}"
+      ldapGroupsAsRoles: true
+      groupBaseDn: "{{ nexus_ldap.group_base_dn }}"
+      groupObjectClass: "{{ nexus_ldap.group_object_class }}"
+      groupIdAttribute: "{{ nexus_ldap.group_id_attribute }}"
+      groupMemberAttribute: "{{ nexus_ldap.group_member_attribute }}"
+      authenticationMethod: "{{ nexus_ldap.authentication_method }}"
+      ssl: "{{ nexus_ldap.ssl }}"
+      startTls: "{{ nexus_ldap.start_tls }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _ldap_config
+  until: _ldap_config.status in [200, 201]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_ldap_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_ldap_run_once }}"
+  diff: "{{ nexus_ldap_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  when: nexus_ldap_enabled
+  tags: [nexus, ldap, config]
+
+- name: LDAP | Get current realms
+  ansible.builtin.uri:
+    url: "{{ nexus_ldap_realms_url }}"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  register: _ldap_realms
+  when: nexus_ldap_enabled
+  tags: [nexus, ldap, realms]
+
+- name: LDAP | Enable LdapRealm
+  ansible.builtin.uri:
+    url: "{{ nexus_ldap_realms_url }}"
+    method: PUT
+    body_format: json
+    body: "{{ _ldap_realms.json | default(['NexusAuthenticatingRealm', 'NexusAuthoringRealm']) | unique(['LdapRealm']) | list }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  when:
+    - nexus_ldap_enabled
+    - "'LdapRealm' not in (_ldap_realms.json | default([]))"
+  tags: [nexus, ldap, realms]
+
+- name: LDAP | Configure group to role mapping
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/security/roles"
+    method: POST
+    body_format: json
+    body:
+      roleId: "{{ item.ldap_group | regex_replace('[^a-zA-Z0-9]', '_') }}"
+      name: "{{ item.ldap_group }}"
+      description: "Auto-mapped from LDAP: {{ item.ldap_group }}"
+      privileges: []
+      roles:
+        - "{{ item.nexus_role }}"
+      source: ldap
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  loop: "{{ nexus_ldap_group_mapping }}"
+  loop_control:
+    label: "Map: {{ item.ldap_group }} -> {{ item.nexus_role }}"
+    pause: 0
+  when:
+    - nexus_ldap_enabled
+    - nexus_ldap_group_mapping | length > 0
+  ignore_errors: true
+  tags: [nexus, ldap, mapping]
+
+- name: LDAP | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[LDAP] Configuration Complete"
+      - "  Enabled: {{ nexus_ldap_enabled }}"
+      - "  Server: {{ nexus_ldap.protocol }}://{{ nexus_ldap.host }}:{{ nexus_ldap.port }}"
+      - "  Group Mapping: {{ nexus_ldap_group_mapping | length }} rule(s)"
+  when: nexus_ldap_enabled
+  tags: [nexus, ldap, summary]

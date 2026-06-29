@@ -1,0 +1,46 @@
+# Nexus Repository Manager Properties
+# Managed by Ansible - DO NOT EDIT MANUALLY
+
+application-host={{ nexus_listen_address }}
+application-port={{ nexus_port }}
+{% if nexus_https_enabled %}
+application-ssl-port={{ nexus_https_port }}
+{% endif %}
+nexus.scripts.allowCreation={{ nexus_enable_nexus_orient | lower }}
+nexus.webapp.context-path={{ nexus_context_path }}
+nexus.data={{ nexus_data_dir }}
+nexus.tmpdir={{ nexus_temp_dir }}
+nexus.orient.workspace={{ nexus_work_dir }}
+{% if nexus_smtp_host != "" %}
+nexus.smtp.host={{ nexus_smtp_host }}
+nexus.smtp.port={{ nexus_smtp_port }}
+{% if nexus_smtp_from_address != "" %}
+nexus.smtp.fromAddress={{ nexus_smtp_from_address }}
+{% endif %}
+{% if nexus_smtp_username != "" %}
+nexus.smtp.username={{ nexus_smtp_username }}
+nexus.smtp.password={{ nexus_smtp_password }}
+{% endif %}
+nexus.smtp.ssl={{ nexus_smtp_ssl | lower }}
+nexus.smtp.starttls={{ nexus_smtp_starttls | lower }}
+{% endif %}
+{% if nexus_proxy_enabled %}
+{% if nexus_http_proxy_host != "" %}
+nexus.httpProxy.host={{ nexus_http_proxy_host }}
+nexus.httpProxy.port={{ nexus_http_proxy_port }}
+{% if nexus_http_proxy_username != "" %}
+nexus.httpProxy.username={{ nexus_http_proxy_username }}
+nexus.httpProxy.password={{ nexus_http_proxy_password }}
+{% endif %}
+nexus.httpProxy.nonProxyHosts={{ nexus_no_proxy_hosts }}
+{% endif %}
+{% if nexus_https_proxy_host != "" %}
+nexus.httpsProxy.host={{ nexus_https_proxy_host }}
+nexus.httpsProxy.port={{ nexus_https_proxy_port }}
+{% if nexus_https_proxy_username != "" %}
+nexus.httpsProxy.username={{ nexus_https_proxy_username }}
+nexus.httpsProxy.password={{ nexus_https_proxy_password }}
+{% endif %}
+nexus.httpsProxy.nonProxyHosts={{ nexus_no_proxy_hosts }}
+{% endif %}
+{% endif %}

@@ -1,0 +1,3 @@
+---
+# nexus_security has no handlers.
+# SSL configuration changes require Nexus restart, handled by nexus_config role.

@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: minio
+  description: Install MinIO server for Nexus blob storage
+  author: nexus-as-code
+  license: Apache-2.0
+  min_ansible_version: "2.14"
+  galaxy_tags: [minio, storage]
+dependencies: []

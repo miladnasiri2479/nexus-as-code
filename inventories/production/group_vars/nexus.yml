@@ -1,0 +1,20 @@
+---
+# Production environment overrides
+# Copy this file from group_vars/all/nexus.yml and customize.
+
+nexus_version: "3.72.0"
+nexus_port: 8081
+
+# Example: Set admin password
+# nexus_admin_password: "{{ vault_nexus_admin_password }}"
+
+# Example: Enable S3 storage
+# nexus_storage:
+#   type: s3
+#   s3:
+#     enabled: true
+#     region: us-east-1
+#     bucket_prefix: prod-nexus
+#     access_key_id: "{{ vault_s3_access_key }}"
+#     secret_access_key: "{{ vault_s3_secret_key }}"
+#     endpoint: "https://s3.amazonaws.com"

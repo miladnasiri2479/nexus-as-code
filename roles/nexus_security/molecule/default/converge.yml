@@ -1,0 +1,21 @@
+---
+- name: Converge - Test nexus_security role
+  hosts: all
+  become: true
+  tasks:
+    - name: Include nexus_security role
+      ansible.builtin.include_role:
+        name: nexus_security
+      vars:
+        nexus_admin_password: admin123
+        nexus_anonymous_access_enabled: false
+        nexus_realms:
+          - NexusAuthenticatingRealm
+          - NexusAuthoringRealm
+        nexus_ssl_enabled: false
+        nexus_security_force_ssl: false
+        nexus_security_ssl_only: false
+        nexus_api_retries: 3
+        nexus_api_retry_delay: 5
+        nexus_security_run_once: false
+        nexus_no_log: true

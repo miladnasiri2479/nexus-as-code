@@ -1,0 +1,81 @@
+---
+- name: S3 | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring S3 storage (region: {{ nexus_storage_s3_region }})"
+  when: nexus_storage_s3_enabled
+  tags: [storage, s3]
+
+- name: S3 | Assert endpoint is set
+  ansible.builtin.assert:
+    that:
+      - nexus_storage_s3_endpoint | default('') | length > 0
+    fail_msg: "[S3] ERROR: S3 storage requires an endpoint."
+  when: nexus_storage_s3_enabled
+  tags: [storage, s3, validate]
+
+- name: S3 | Assert credentials are set
+  ansible.builtin.assert:
+    that:
+      - nexus_storage_s3_access_key_id | default('') | length > 0
+      - nexus_storage_s3_secret_access_key | default('') | length > 0
+    fail_msg: "[S3] ERROR: S3 storage requires access_key_id and secret_access_key."
+  when: nexus_storage_s3_enabled
+  tags: [storage, s3, validate]
+
+- name: S3 | Create S3 blob store via Nexus API
+  ansible.builtin.uri:
+    url: "{{ nexus_storage_s3_url }}"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ nexus_storage_s3_bucket_prefix }}-s3"
+      region: "{{ nexus_storage_s3_region }}"
+      bucket: "{{ nexus_storage_s3_bucket_prefix }}"
+      accessKeyId: "{{ nexus_storage_s3_access_key_id }}"
+      secretAccessKey: "{{ nexus_storage_s3_secret_access_key }}"
+      endpoint: "{{ nexus_storage_s3_endpoint }}"
+      pathStyleAccess: "{{ nexus_storage_s3_path_style_access }}"
+      maxErrorRetry: "{{ nexus_storage_s3_max_error_retry }}"
+      encryption: "{{ nexus_storage_s3_encryption | default('') }}"
+      sseKmsKeyId: "{{ nexus_storage_s3_sse_kms_key_id | default('') }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201, 400]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  when: nexus_storage_s3_enabled
+  tags: [storage, s3, create]
+
+- name: S3 | Verify S3 blob store exists
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/blobstores/{{ nexus_storage_s3_bucket_prefix }}-s3"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  when:
+    - nexus_storage_s3_enabled
+    - nexus_storage_s3_validate_connectivity
+  tags: [storage, s3, verify]
+
+- name: S3 | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[S3] Configuration Complete"
+      - "  Region: {{ nexus_storage_s3_region }}"
+      - "  Bucket Prefix: {{ nexus_storage_s3_bucket_prefix }}"
+      - "  Endpoint: {{ nexus_storage_s3_endpoint }}"
+  when: nexus_storage_s3_enabled
+  tags: [storage, s3, summary]

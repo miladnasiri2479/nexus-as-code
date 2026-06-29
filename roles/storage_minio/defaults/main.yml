@@ -1,0 +1,18 @@
+---
+nexus_minio_version: "RELEASE.2024-01-16T16-07-38Z"
+nexus_minio_install_dir: /usr/local/bin
+nexus_minio_data_dir: /data/minio
+nexus_minio_config_dir: /etc/minio
+nexus_minio_cert_dir: /etc/minio/certs
+nexus_minio_user: minio
+nexus_minio_group: minio
+nexus_minio_port: 9000
+nexus_minio_console_port: 9001
+nexus_minio_listen_address: ":{{ nexus_minio_port }}"
+nexus_minio_console_listen_address: ":{{ nexus_minio_console_port }}"
+nexus_minio_access_key: ""
+nexus_minio_secret_key: ""
+nexus_minio_volumes: ""
+nexus_minio_tls_enabled: false
+nexus_minio_service_enabled: true
+nexus_minio_service_state: started

@@ -1,0 +1,6 @@
+---
+- name: Restart nexus
+  ansible.builtin.systemd:
+    name: "{{ nexus_service_name }}"
+    state: restarted
+  listen: Restart nexus

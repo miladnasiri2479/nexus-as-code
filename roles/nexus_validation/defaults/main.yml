@@ -1,0 +1,50 @@
+---
+nexus_validation_enabled: true
+nexus_validation_preflight: true
+nexus_validation_postflight: true
+nexus_validation_fail_on_error: true
+nexus_validation_check_duplicate_repos: true
+nexus_validation_check_duplicate_blobstores: true
+nexus_validation_check_duplicate_buckets: true
+nexus_validation_check_duplicate_ports: true
+nexus_validation_check_admin_password: true
+nexus_validation_check_s3_credentials: true
+nexus_validation_check_minio_credentials: true
+nexus_validation_check_ldap_credentials: true
+nexus_validation_check_proxy_credentials: true
+nexus_validation_check_blobstore_mapping: true
+nexus_validation_check_cleanup_mapping: true
+nexus_validation_check_group_members: true
+nexus_validation_check_privilege_format: true
+nexus_validation_check_file_storage: true
+nexus_validation_check_s3_storage: true
+nexus_validation_check_minio_storage: true
+nexus_validation_check_proxy_host: true
+nexus_validation_check_repo_formats: true
+nexus_validation_check_storage_types: true
+nexus_validation_check_cleanup_ages: true
+nexus_validation_check_cleanup_cron: true
+nexus_validation_check_cleanup_age_units: true
+nexus_validation_check_api_health: true
+nexus_validation_check_repo_count: true
+nexus_validation_check_blobstore_count: true
+nexus_validation_retries: 30
+nexus_validation_delay: 10
+nexus_validation_min_disk_gb: 10
+nexus_repos: []
+nexus_blobstores: []
+nexus_repo_groups: []
+nexus_cleanup_policies: []
+nexus_minio_buckets: []
+nexus_admin_password: ""
+nexus_storage_type: file
+nexus_proxy_enabled: false
+nexus_ldap_enabled: false
+nexus_minio_enabled: false
+nexus_s3_access_key_id: ""
+nexus_s3_secret_access_key: ""
+nexus_ldap:
+  bind_dn: ""
+  bind_password: ""
+nexus_http_proxy_host: ""
+nexus_no_proxy_hosts: ""

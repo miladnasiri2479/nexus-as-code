@@ -1,0 +1,46 @@
+---
+- name: Nexus Config | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring Nexus Repository Manager"
+  tags: [nexus, config]
+
+- name: Nexus Config | Ensure Nexus is running
+  ansible.builtin.uri:
+    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: nexus_status_check
+  retries: 10
+  delay: 5
+  until: nexus_status_check.status == 200
+  tags: [nexus, config]
+
+- name: Nexus Config | Write nexus.properties
+  ansible.builtin.template:
+    src: nexus.properties.j2
+    dest: "{{ nexus_current_link }}/etc/nexus.properties"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0644"
+  notify: Restart nexus
+  tags: [nexus, config]
+
+- name: Nexus Config | Write logback configuration
+  ansible.builtin.template:
+    src: logback.xml.j2
+    dest: "{{ nexus_data_dir }}/etc/logback/logback.xml"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0644"
+  notify: Restart nexus
+  tags: [nexus, config]
+
+- name: Nexus Config | Write JVM options
+  ansible.builtin.template:
+    src: nexus.vmoptions.j2
+    dest: "{{ nexus_data_dir }}/etc/nexus.vmoptions"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0644"
+  notify: Restart nexus
+  tags: [nexus, config]

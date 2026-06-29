@@ -1,0 +1,16 @@
+<configuration scan="true" scanPeriod="30 seconds">
+  <appender name="LOGFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>{{ nexus_data_dir }}/log/nexus.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>{{ nexus_data_dir }}/log/nexus-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+      <maxFileSize>{{ nexus_log_max_size }}</maxFileSize>
+      <maxHistory>{{ nexus_log_max_files }}</maxHistory>
+    </rollingPolicy>
+    <encoder>
+      <pattern>{{ nexus_log_pattern }}</pattern>
+    </encoder>
+  </appender>
+  <root level="{{ nexus_log_level }}">
+    <appender-ref ref="LOGFILE"/>
+  </root>
+</configuration>

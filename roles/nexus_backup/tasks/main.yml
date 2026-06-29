@@ -1,0 +1,82 @@
+---
+- name: Backup | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring Nexus backup ({{ nexus_backup_dir }})"
+  when: nexus_backup_enabled
+  tags: [nexus, backup]
+
+- name: Backup | Create backup directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  loop:
+    - "{{ nexus_backup_dir }}"
+    - "{{ nexus_backup_temp_dir }}"
+  when: nexus_backup_enabled
+  tags: [nexus, backup, dirs]
+
+- name: Backup | Write backup script
+  ansible.builtin.template:
+    src: nexus-backup.sh.j2
+    dest: /usr/local/bin/nexus-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: nexus_backup_enabled
+  tags: [nexus, backup, scripts]
+
+- name: Backup | Write restore script
+  ansible.builtin.template:
+    src: nexus-restore.sh.j2
+    dest: /usr/local/bin/nexus-restore.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: nexus_backup_enabled
+  tags: [nexus, backup, scripts]
+
+- name: Backup | Create cron job
+  ansible.builtin.cron:
+    name: "Nexus Repository Manager Backup"
+    minute: "{{ nexus_backup_cron_schedule.split(' ')[0] }}"
+    hour: "{{ nexus_backup_cron_schedule.split(' ')[1] }}"
+    day: "{{ nexus_backup_cron_schedule.split(' ')[2] }}"
+    month: "{{ nexus_backup_cron_schedule.split(' ')[3] }}"
+    weekday: "{{ nexus_backup_cron_schedule.split(' ')[4] }}"
+    job: "/usr/local/bin/nexus-backup.sh --retention {{ nexus_backup_retention_days }} >> /var/log/nexus-backup.log 2>&1"
+    user: "{{ nexus_backup_cron_user }}"
+  when:
+    - nexus_backup_enabled
+    - nexus_backup_cron_enabled
+  tags: [nexus, backup, cron]
+
+- name: Backup | Configure log rotation
+  ansible.builtin.copy:
+    content: |
+      /var/log/nexus-backup.log {
+          daily
+          rotate {{ nexus_backup_retention_count }}
+          compress
+          missingok
+          notifempty
+          create 640 {{ nexus_runas_user }} {{ nexus_runas_group }}
+      }
+    dest: /etc/logrotate.d/nexus-backup
+    owner: root
+    group: root
+    mode: "0644"
+  when: nexus_backup_enabled
+  tags: [nexus, backup, logrotate]
+
+- name: Backup | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[BACKUP] Configuration Complete"
+      - "  Enabled: {{ nexus_backup_enabled }}"
+      - "  Directory: {{ nexus_backup_dir }}"
+      - "  Cron: {{ nexus_backup_cron_enabled }}"
+      - "  S3: {{ nexus_backup_s3_enabled }}"
+  tags: [nexus, backup, summary]

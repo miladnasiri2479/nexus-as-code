@@ -1,0 +1,66 @@
+---
+- name: Storage Local | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring local filesystem storage at {{ nexus_storage_local_path }}"
+  tags: [storage, local]
+
+- name: Storage Local | Assert storage path is set
+  ansible.builtin.assert:
+    that:
+      - nexus_storage_local_path | default('') | length > 0
+    fail_msg: "[STORAGE-LOCAL] ERROR: nexus_storage_local_path is empty."
+  tags: [storage, local, validate]
+
+- name: Storage Local | Create base storage directory
+  ansible.builtin.file:
+    path: "{{ nexus_storage_local_path }}"
+    state: directory
+    owner: "{{ nexus_storage_local_owner }}"
+    group: "{{ nexus_storage_local_group }}"
+    mode: "{{ nexus_storage_local_mode }}"
+  tags: [storage, local, dirs]
+
+- name: Storage Local | Create blobstore subdirectories
+  ansible.builtin.file:
+    path: "{{ nexus_storage_local_path }}/{{ item.name }}"
+    state: directory
+    owner: "{{ nexus_storage_local_owner }}"
+    group: "{{ nexus_storage_local_group }}"
+    mode: "{{ nexus_storage_local_mode }}"
+  loop: "{{ nexus_blobstores | default([]) | selectattr('type', 'equalto', 'file') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: nexus_storage_local_create_subdirs | bool
+  tags: [storage, local, dirs]
+
+- name: Storage Local | Set ownership
+  ansible.builtin.file:
+    path: "{{ nexus_storage_local_path }}"
+    owner: "{{ nexus_storage_local_owner }}"
+    group: "{{ nexus_storage_local_group }}"
+    recurse: true
+  tags: [storage, local, permissions]
+
+- name: Storage Local | Get disk space
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      df -BG "{{ nexus_storage_local_path }}" | awk 'NR==2{print $4}' | tr -d 'G'
+    executable: /bin/bash
+  register: _storage_local_free_gb
+  changed_when: false
+  tags: [storage, local, validate]
+
+- name: Storage Local | Warn if low disk space
+  ansible.builtin.debug:
+    msg: "[STORAGE-LOCAL] WARNING: Low disk space: {{ _storage_local_free_gb.stdout }}GB free"
+  when: _storage_local_free_gb.stdout | default('999') | int < nexus_storage_local_min_free_gb | int
+  tags: [storage, local, validate]
+
+- name: Storage Local | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[STORAGE-LOCAL] Configuration Complete"
+      - "  Path: {{ nexus_storage_local_path }}"
+      - "  Free: {{ _storage_local_free_gb.stdout | default('unknown') }}GB"
+  tags: [storage, local, summary]

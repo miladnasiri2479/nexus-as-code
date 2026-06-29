@@ -1,0 +1,113 @@
+---
+- name: Upgrade | Display role info
+  ansible.builtin.debug:
+    msg: "Upgrading Nexus to {{ nexus_version }}"
+  tags: [nexus, upgrade]
+
+- name: Upgrade | Check if Nexus is installed
+  ansible.builtin.stat:
+    path: "{{ nexus_current_link }}/bin/nexus"
+  register: _upgrade_binary
+  tags: [nexus, upgrade, detect]
+
+- name: Upgrade | Get current version
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      "{{ nexus_current_link }}/bin/nexus" --version 2>/dev/null \
+        | head -1 \
+        | grep -oP '\d+\.\d+\.\d+' \
+        || echo "not_installed"
+    executable: /bin/bash
+  register: _upgrade_current_version
+  changed_when: false
+  when: _upgrade_binary.stat.exists
+  tags: [nexus, upgrade, detect]
+
+- name: Upgrade | Set version facts
+  ansible.builtin.set_fact:
+    _upgrade_current: "{{ _upgrade_current_version.stdout | default('not_installed') }}"
+    _upgrade_needed: "{{ _upgrade_current_version.stdout | default('not_installed') != nexus_version }}"
+  tags: [nexus, upgrade, detect]
+
+- name: Upgrade | Skip if already at target version
+  ansible.builtin.debug:
+    msg: "Nexus is already at version {{ nexus_version }}. Skipping upgrade."
+  when:
+    - nexus_upgrade_skip_if_current | bool
+    - not _upgrade_needed | bool
+  tags: [nexus, upgrade, skip]
+
+- name: Upgrade | Backup before upgrade
+  ansible.builtin.include_role:
+    name: nexus_backup
+  when:
+    - _upgrade_needed | bool
+    - nexus_upgrade_backup_before | bool
+  tags: [nexus, upgrade, backup]
+
+- name: Upgrade | Stop Nexus service
+  ansible.builtin.systemd:
+    name: "{{ nexus_service_name }}"
+    state: stopped
+  when: _upgrade_needed | bool
+  tags: [nexus, upgrade, service]
+
+- name: Upgrade | Wait for service to stop
+  block:
+    - name: Upgrade | Wait for port to be free
+      ansible.builtin.wait_for:
+        port: "{{ nexus_port }}"
+        state: stopped
+        timeout: 60
+  rescue:
+    - name: Upgrade | Service stop timeout
+      ansible.builtin.debug:
+        msg: "Service stop timeout, continuing..."
+  when: _upgrade_needed | bool
+  tags: [nexus, upgrade, service]
+
+- name: Upgrade | Install new version
+  ansible.builtin.include_role:
+    name: nexus_install
+  when: _upgrade_needed | bool
+  tags: [nexus, upgrade, install]
+
+- name: Upgrade | Wait for Nexus API
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus_port }}{{ nexus_context_path }}service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: _upgrade_health
+  until: _upgrade_health.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_delay }}"
+  when:
+    - _upgrade_needed | bool
+    - nexus_upgrade_verify_version | bool
+  tags: [nexus, upgrade, verify]
+
+- name: Upgrade | Verify installed version
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      "{{ nexus_current_link }}/bin/nexus" --version 2>/dev/null \
+        | head -1 \
+        | grep -oP '\d+\.\d+\.\d+' \
+        || echo "unknown"
+    executable: /bin/bash
+  register: _upgrade_final_version
+  changed_when: false
+  when:
+    - _upgrade_needed | bool
+    - nexus_upgrade_verify_version | bool
+  tags: [nexus, upgrade, verify]
+
+- name: Upgrade | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[UPGRADE] Upgrade Complete"
+      - "  Previous: {{ _upgrade_current }}"
+      - "  Current: {{ nexus_version }}"
+      - "  Upgraded: {{ _upgrade_needed }}"
+  tags: [nexus, upgrade, summary]

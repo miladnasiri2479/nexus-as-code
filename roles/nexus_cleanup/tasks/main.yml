@@ -1,0 +1,190 @@
+---
+###############################################################################
+# nexus_cleanup — tasks/main.yml
+###############################################################################
+
+- name: Cleanup | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring {{ nexus_cleanup_policies | length }} cleanup policy(ies)"
+  tags: [nexus, cleanup]
+
+- name: Cleanup | Assert admin password is set
+  ansible.builtin.assert:
+    that:
+      - nexus_admin_password | default('') | length > 0
+    fail_msg: "[CLEANUP] ERROR: Missing required variable 'nexus_admin_password'."
+  tags: [nexus, cleanup, validate]
+
+- name: Cleanup | Validate age units
+  ansible.builtin.assert:
+    that:
+      - item.age_unit | default('days') in nexus_cleanup_valid_age_units
+    fail_msg: "[CLEANUP] ERROR: Invalid age_unit '{{ item.age_unit }}' for policy '{{ item.name }}'. Valid: {{ nexus_cleanup_valid_age_units | join(', ') }}"
+  loop: "{{ nexus_cleanup_policies }}"
+  loop_control:
+    label: "Policy: {{ item.name }}"
+    pause: 0
+  when: nexus_cleanup_policies | length > 0
+  tags: [nexus, cleanup, validate]
+
+- name: Cleanup | Get existing policies
+  ansible.builtin.uri:
+    url: "{{ nexus_cleanup_list_url }}"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _cleanup_list
+  until: _cleanup_list.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_cleanup_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_cleanup_run_once }}"
+  changed_when: false
+  tags: [nexus, cleanup, query]
+
+- name: Cleanup | Set existing policies fact
+  ansible.builtin.set_fact:
+    _existing_cleanup: "{{ _cleanup_list.json | default([]) | map(attribute='name') | list }}"
+  tags: [nexus, cleanup, query]
+
+- name: Cleanup | Create cleanup policies
+  ansible.builtin.uri:
+    url: "{{ nexus_cleanup_create_url }}"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      format: "{{ item.format }}"
+      repo: "{{ item.repo }}"
+      notes: "{{ item.notes | default('') }}"
+      cron: "{{ item.cron | default('') }}"
+      group: "{{ item.group | default(true) }}"
+      age: "{{ item.age | default(30) }}"
+      ageUnit: "{{ item.age_unit | default('days') }}"
+      ageRemove: true
+      regex: "{{ item.regex | default('') }}"
+      deployments: true
+      preRelease: "{{ item.pre_release | default(true) }}"
+      alpha: "{{ item.alpha | default(true) }}"
+      beta: "{{ item.beta | default(true) }}"
+      deployerReleases: "{{ item.deployer | default(true) }}"
+      deployerPrerelease: "{{ item.deployer | default(true) }}"
+      deployerSnapshots: "{{ item.deployer | default(true) }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _cleanup_create
+  until: _cleanup_create.status in [200, 201]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_cleanup_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_cleanup_run_once }}"
+  diff: "{{ nexus_cleanup_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  loop: "{{ nexus_cleanup_policies }}"
+  loop_control:
+    label: "Create: {{ item.name }}"
+    pause: 0
+  when: item.name not in _existing_cleanup
+  tags: [nexus, cleanup, create]
+
+- name: Cleanup | Update existing policies
+  ansible.builtin.uri:
+    url: "{{ nexus_cleanup_create_url }}/{{ item.name }}"
+    method: PUT
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      format: "{{ item.format }}"
+      repo: "{{ item.repo }}"
+      notes: "{{ item.notes | default('') }}"
+      cron: "{{ item.cron | default('') }}"
+      group: "{{ item.group | default(true) }}"
+      age: "{{ item.age | default(30) }}"
+      ageUnit: "{{ item.age_unit | default('days') }}"
+      ageRemove: true
+      regex: "{{ item.regex | default('') }}"
+      deployments: true
+      preRelease: "{{ item.pre_release | default(true) }}"
+      alpha: "{{ item.alpha | default(true) }}"
+      beta: "{{ item.beta | default(true) }}"
+      deployerReleases: "{{ item.deployer | default(true) }}"
+      deployerPrerelease: "{{ item.deployer | default(true) }}"
+      deployerSnapshots: "{{ item.deployer | default(true) }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _cleanup_update
+  until: _cleanup_update.status in [200, 204]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_cleanup_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_cleanup_run_once }}"
+  diff: "{{ nexus_cleanup_diff }}"
+  loop: "{{ nexus_cleanup_policies }}"
+  loop_control:
+    label: "Update: {{ item.name }}"
+    pause: 0
+  when: item.name in _existing_cleanup
+  tags: [nexus, cleanup, update]
+
+- name: Cleanup | Delete unmanaged policies
+  ansible.builtin.uri:
+    url: "{{ nexus_cleanup_create_url }}/{{ item }}"
+    method: DELETE
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _cleanup_delete
+  until: _cleanup_delete.status in [200, 204]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_cleanup_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_cleanup_run_once }}"
+  diff: "{{ nexus_cleanup_diff }}"
+  loop: "{{ _existing_cleanup }}"
+  loop_control:
+    label: "Delete: {{ item }}"
+    pause: 0
+  when:
+    - nexus_cleanup_delete_unmanaged
+    - item not in (nexus_cleanup_policies | map(attribute='name') | list)
+  tags: [nexus, cleanup, delete]
+
+- name: Cleanup | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[CLEANUP] Configuration Complete"
+      - "  Defined: {{ nexus_cleanup_policies | length }}"
+      - "  Already existed: {{ _existing_cleanup | intersect(nexus_cleanup_policies | map(attribute='name') | list) | length }}"
+      - "  Created: {{ nexus_cleanup_policies | length - _existing_cleanup | intersect(nexus_cleanup_policies | map(attribute='name') | list) | length }}"
+  tags: [nexus, cleanup, summary]

@@ -1,0 +1,53 @@
+#!/bin/bash
+# =============================================================================
+# Nexus Repository Manager — Health Check Script
+# Managed by Ansible — DO NOT EDIT MANUALLY
+# Role: nexus_backup
+# =============================================================================
+
+set -euo pipefail
+
+NEXUS_URL="http://{{ nexus_listen_address | default('0.0.0.0') }}:{{ nexus_port | default(8081) }}{{ nexus_context_path | default('/') }}"
+MAX_RETRIES=5
+RETRY_DELAY=10
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+check_api() {
+    local status
+    status=$(curl -s -o /dev/null -w "%{http_code}" "${NEXUS_URL}service/rest/v1/status" 2>/dev/null)
+    [ "$status" = "200" ]
+}
+
+check_disk() {
+    local usage
+    usage=$(df -h {{ nexus_data_dir | default('/var/nexus/data') }} | awk 'NR==2{print $5}' | tr -d '%')
+    [ "$usage" -lt 90 ]
+}
+
+log "Running Nexus health checks..."
+
+# API Check
+RETRIES=0
+until check_api; do
+    RETRIES=$((RETRIES + 1))
+    if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+        log "ERROR: Nexus API not responding after ${MAX_RETRIES} attempts"
+        exit 1
+    fi
+    log "Waiting for Nexus API... (attempt ${RETRIES}/${MAX_RETRIES})"
+    sleep "$RETRY_DELAY"
+done
+log "API check: OK"
+
+# Disk Check
+if check_disk; then
+    log "Disk check: OK"
+else
+    log "WARNING: Disk usage is above 90%"
+    exit 1
+fi
+
+log "All health checks passed"

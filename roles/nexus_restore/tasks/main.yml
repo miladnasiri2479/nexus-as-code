@@ -1,0 +1,174 @@
+---
+- name: Restore | Display role info
+  ansible.builtin.debug:
+    msg: "Restoring Nexus from {{ nexus_restore_source }}"
+  tags: [nexus, restore]
+
+- name: Restore | Assert restore source is set
+  ansible.builtin.assert:
+    that:
+      - nexus_restore_source | default('') | length > 0
+    fail_msg: "[RESTORE] ERROR: nexus_restore_source is required."
+  tags: [nexus, restore, validate]
+
+- name: Restore | Check backup file exists
+  ansible.builtin.stat:
+    path: "{{ nexus_restore_source }}"
+  register: _restore_file
+  when: not (nexus_backup_s3_enabled | default(false))
+  tags: [nexus, restore, validate]
+
+- name: Restore | Fail if file not found
+  ansible.builtin.fail:
+    msg: "[RESTORE] ERROR: Backup file not found: {{ nexus_restore_source }}"
+  when:
+    - not (nexus_backup_s3_enabled | default(false))
+    - not _restore_file.stat.exists | default(true)
+  tags: [nexus, restore, validate]
+
+- name: Restore | Verify checksum
+  block:
+    - name: Restore | Run checksum verification
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          sha256sum -c "{{ nexus_restore_source }}.sha256"
+        executable: /bin/bash
+      register: _checksum_result
+  rescue:
+    - name: Restore | Checksum verification failed
+      ansible.builtin.fail:
+        msg: "[RESTORE] ERROR: Checksum verification failed. Backup may be corrupted."
+  when:
+    - nexus_restore_validate | bool
+    - not (nexus_backup_s3_enabled | default(false))
+  tags: [nexus, restore, verify]
+
+- name: Restore | Stop Nexus service
+  block:
+    - name: Restore | Stop service
+      ansible.builtin.systemd:
+        name: "{{ nexus_service_name }}"
+        state: stopped
+  rescue:
+    - name: Restore | Service may not be running
+      ansible.builtin.debug:
+        msg: "Service not running, continuing..."
+  tags: [nexus, restore, service]
+
+- name: Restore | Wait for service to stop
+  block:
+    - name: Restore | Wait for port to be free
+      ansible.builtin.wait_for:
+        port: "{{ nexus_port }}"
+        state: stopped
+        timeout: 60
+  rescue:
+    - name: Restore | Service stop timeout
+      ansible.builtin.debug:
+        msg: "Service stop timeout, continuing..."
+  tags: [nexus, restore, service]
+
+- name: Restore | Create pre-restore snapshot
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      SNAPSHOT_DIR="{{ nexus_backup_dir }}/pre-restore-$(date +%Y%m%d_%H%M%S)"
+      mkdir -p "${SNAPSHOT_DIR}"
+      cp -a "{{ nexus_data_dir }}/etc" "${SNAPSHOT_DIR}/" 2>/dev/null || true
+      echo "${SNAPSHOT_DIR}"
+    executable: /bin/bash
+  register: _snapshot_dir
+  changed_when: _snapshot_dir.stdout | default('') | length > 0
+  when: nexus_restore_pre_snapshot | bool
+  tags: [nexus, restore, snapshot]
+
+- name: Restore | Extract backup
+  ansible.builtin.unarchive:
+    src: "{{ nexus_restore_source }}"
+    dest: /tmp/nexus-restore
+    remote_src: true
+  tags: [nexus, restore, extract]
+
+- name: Restore | Get backup contents
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      tar -tzf "{{ nexus_restore_source }}" | head -1 | cut -d'/' -f1
+    executable: /bin/bash
+  register: _restore_name
+  changed_when: false
+  tags: [nexus, restore, extract]
+
+- name: Restore | Restore database
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rm -rf "{{ nexus_data_dir }}/orient"
+      cp -a "/tmp/nexus-restore/{{ _restore_name.stdout }}/orient" "{{ nexus_data_dir }}/"
+    executable: /bin/bash
+  when: _restore_name.stdout | default('') | length > 0
+  changed_when: true
+  tags: [nexus, restore, database]
+
+- name: Restore | Restore configuration
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      cp -a "/tmp/nexus-restore/{{ _restore_name.stdout }}/etc" "{{ nexus_data_dir }}/"
+    executable: /bin/bash
+  when: _restore_name.stdout | default('') | length > 0
+  changed_when: true
+  tags: [nexus, restore, config]
+
+- name: Restore | Restore blob stores
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      rsync -a "/tmp/nexus-restore/{{ _restore_name.stdout }}/blobs" "{{ nexus_data_dir }}/" 2>/dev/null || \
+      cp -a "/tmp/nexus-restore/{{ _restore_name.stdout }}/blobs" "{{ nexus_data_dir }}/"
+    executable: /bin/bash
+  when: _restore_name.stdout | default('') | length > 0
+  changed_when: true
+  tags: [nexus, restore, blobs]
+
+- name: Restore | Set ownership
+  ansible.builtin.file:
+    path: "{{ nexus_data_dir }}"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    recurse: false
+  tags: [nexus, restore, permissions]
+
+- name: Restore | Start Nexus service
+  ansible.builtin.systemd:
+    name: "{{ nexus_service_name }}"
+    state: started
+    enabled: true
+  tags: [nexus, restore, service]
+
+- name: Restore | Wait for Nexus API
+  ansible.builtin.uri:
+    url: "http://localhost:{{ nexus_port }}{{ nexus_context_path }}service/rest/v1/status"
+    method: GET
+    status_code: 200
+  register: _restore_health
+  until: _restore_health.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_delay }}"
+  when: nexus_restore_post_check | bool
+  tags: [nexus, restore, verify]
+
+- name: Restore | Cleanup temp directory
+  ansible.builtin.file:
+    path: /tmp/nexus-restore
+    state: absent
+  tags: [nexus, restore, cleanup]
+
+- name: Restore | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[RESTORE] Restore Complete"
+      - "  Source: {{ nexus_restore_source }}"
+      - "  Snapshot: {{ _snapshot_dir.stdout | default('N/A') }}"
+  tags: [nexus, restore, summary]

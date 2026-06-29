@@ -1,0 +1,41 @@
+---
+###############################################################################
+# nexus_install — tasks/main.yml
+#
+# Main orchestrator. Delegates to binary or Docker based on install method.
+# All tasks are idempotent — safe to run multiple times.
+###############################################################################
+
+- name: Nexus Install | Display role info
+  ansible.builtin.debug:
+    msg: >-
+      Installing Nexus {{ nexus_version }} ({{ nexus_edition }})
+      via {{ nexus_install_method }}
+  tags: [nexus, install]
+
+###############################################################################
+# VALIDATE INSTALLATION METHOD
+###############################################################################
+
+- name: Nexus Install | Validate installation method
+  ansible.builtin.assert:
+    that:
+      - nexus_install_method in ['binary', 'docker', 'compose']
+    fail_msg: >-
+      INVALID_INSTALL_METHOD: nexus_install_method must be one of: binary, docker, compose.
+      Got: "{{ nexus_install_method }}"
+  tags: [nexus, install, validate]
+
+###############################################################################
+# DELEGATE TO INSTALLATION METHOD
+###############################################################################
+
+- name: Nexus Install | Binary installation
+  ansible.builtin.include_tasks: install_binary.yml
+  when: nexus_install_method == 'binary'
+  tags: [nexus, install, binary]
+
+- name: Nexus Install | Docker installation
+  ansible.builtin.include_tasks: install_docker.yml
+  when: nexus_install_method in ['docker', 'compose']
+  tags: [nexus, install, docker]

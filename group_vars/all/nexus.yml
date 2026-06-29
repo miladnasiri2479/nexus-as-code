@@ -1,0 +1,1506 @@
+---
+###############################################################################
+# Nexus Repository Manager — Master Configuration
+# ============================================================================
+# This is the ONLY file you edit.
+# All Ansible code (roles/, tasks/, templates/, plugins/) reads from here.
+# Do NOT modify any file outside inventories/<env>/group_vars/nexus.yml
+#
+# Variable precedence (highest wins):
+#   host_vars/<host>.yml
+#   inventories/<env>/group_vars/nexus.yml   ← YOU EDIT THIS
+#   group_vars/all/nexus.yml                 ← THIS FILE (defaults)
+#   roles/*/defaults/main.yml                ← fallbacks
+###############################################################################
+
+###############################################################################
+# SECTION 1 — GENERAL
+###############################################################################
+# Master switch and identity for the deployment.
+# Set nexus_enabled: false to skip the entire deployment.
+
+# Enable/disable the entire Nexus deployment.
+# When false, no roles execute, no packages installed, no service started.
+# Type: bool
+nexus_enabled: true
+
+# Hostname — automatically resolved from inventory.
+# Override only if the inventory hostname differs from the desired Nexus name.
+# Type: string
+# Example: "nexus.corp.example.com"
+nexus_hostname: "{{ inventory_hostname }}"
+
+# Fully qualified domain name used in base URL, SSL certificates, and reverse proxy.
+# Type: string
+nexus_fqdn: "{{ inventory_hostname }}"
+
+# Installation method.
+#   "binary"  — download tarball from Sonatype (recommended, no repo needed)
+#   "package" — install via yum/apt repository (requires external repo setup)
+# Type: string  |  Valid: binary, package
+nexus_install_method: binary
+
+# Nexus version.
+# Must match a release at nexus_download_base_url.
+# Used in tarball name: nexus-{edition}-{version}.tar.gz
+# Type: string  |  Example: "3.72.0"
+nexus_version: "3.72.0"
+
+# Edition.
+#   "oss" — open-source, free
+#   "pro" — commercial, requires license
+# Type: string  |  Valid: oss, pro
+nexus_edition: oss
+
+# Download URL overrides (leave empty to auto-construct).
+# Type: string
+nexus_download_base_url: "https://download.sonatype.com/nexus/3"
+nexus_download_url: ""
+nexus_download_checksum: ""
+nexus_download_checksum_algorithm: sha256
+nexus_download_timeout: 600
+
+# HTTP proxy for downloading the Nexus tarball (not the same as outbound repo proxy).
+# Type: string
+nexus_download_proxy: ""
+nexus_download_proxy_user: ""
+nexus_download_proxy_password: ""
+
+
+###############################################################################
+# SECTION 2 — SERVICE
+###############################################################################
+# Systemd service and network binding.
+
+# Systemd unit name.
+# Type: string
+nexus_service_name: nexus
+
+# Desired state after deployment: started, stopped.
+# Type: string
+nexus_service_state: started
+
+# Start on boot.
+# Type: bool
+nexus_service_enabled: true
+
+# HTTP port for the Nexus UI and REST API.
+# Type: int  |  Range: 1-65535
+nexus_port: 8081
+
+# IP to bind to.
+#   "0.0.0.0" = all interfaces (default)
+#   "127.0.0.1" = localhost only (use behind reverse proxy)
+# Type: string
+nexus_listen_address: "0.0.0.0"
+
+# Web application context path.
+#   "/" = root
+#   "/nexus" = all URLs prefixed with /nexus
+# Type: string
+nexus_context_path: "/"
+
+
+###############################################################################
+# SECTION 3 — JVM
+###############################################################################
+# Java Virtual Machine tuning.
+# Recommendation: set -Xms = -Xmx = 50% of host RAM, max 32 GB.
+
+# Heap memory flags.
+# Type: string
+# Example: "-Xms4g -Xmx4g"
+nexus_jvm_memory: "-Xms2703m -Xmx2703m"
+
+# Additional JVM flags (GC, diagnostics).
+# Type: string
+# Example: "-XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError"
+nexus_jvm_additional: ""
+
+# Extra options appended last in .vmoptions.
+# Type: string
+nexus_extra_jvm_opts: ""
+
+# Off-heap direct memory limit.
+# Type: string
+nexus_max_direct_memory: "2703m"
+
+# Enable embedded Orient database.
+# Set false only if migrating to external database (Pro feature).
+# Type: bool
+nexus_enable_nexus_orient: true
+
+
+###############################################################################
+# SECTION 4 — DIRECTORIES
+###############################################################################
+# File system paths. Change only if your layout differs from standard.
+
+# Base installation root.
+# Type: string
+nexus_install_dir: /opt/sonatype
+
+# Full path to the extracted distribution.
+# Type: string (derived)
+nexus_app_dir: "{{ nexus_install_dir }}/nexus-{{ nexus_edition }}-{{ nexus_version }}"
+
+# Symlink pointing to the active version. Updated on upgrade.
+# Type: string (derived)
+nexus_current_link: "{{ nexus_install_dir }}/current"
+
+# Primary data root — database, blobs, logs, etc.
+# Type: string
+nexus_data_dir: /var/nexus/data
+
+# Scratch directories.
+# Type: string
+nexus_temp_dir: /var/nexus/tmp
+nexus_work_dir: /var/nexus/scratch
+
+# OS user / group that owns all Nexus files and runs the service.
+# Created automatically when nexus_create_user: true.
+# Type: string
+nexus_runas_user: nexus
+nexus_runas_group: nexus
+
+
+###############################################################################
+# SECTION 5 — STORAGE BACKEND
+###############################################################################
+# Defines the underlying storage technology.
+# Individual blob stores (Section 6) may override these settings.
+
+nexus_storage:
+  # Primary storage type: "file" (local disk) or "s3" (AWS / S3-compatible).
+  # Type: string  |  Valid: file, s3
+  type: file
+
+  # ── Local filesystem ──
+  file:
+    # Base directory for local blob storage.
+    # Type: string
+    path: /data/nexus
+
+  # ── S3 (AWS, MinIO, DigitalOcean Spaces, etc.) ──
+  s3:
+    # Enable S3 backend globally.
+    # Type: bool
+    enabled: false
+
+    # AWS region or S3-compatible region.
+    # Type: string
+    region: us-east-1
+
+    # Bucket name prefix.
+    # Actual bucket: {prefix}-{blobstore-name}
+    # Type: string
+    bucket_prefix: nexus
+
+    # Credentials — use vault for production.
+    # Type: string (sensitive)
+    access_key_id: ""
+    secret_access_key: ""
+
+    # Endpoint URL.
+    #   AWS       → leave empty (default S3 endpoint)
+    #   MinIO     → "http://minio.internal:9000"
+    #   DO Spaces → "https://nyc3.digitaloceanspaces.com"
+    # Type: string
+    endpoint: ""
+
+    # IAM role ARN for cross-account access (optional).
+    # Type: string
+    assume_role: ""
+
+    # STS session token (optional).
+    # Type: string
+    session_token: ""
+
+    # Credential expiry timestamp (optional).
+    # Type: string  |  ISO 8601
+    expiration: ""
+
+    # Prefix inside the bucket.
+    # Type: string
+    base_directory: ""
+
+    # Multi-part upload chunk size in bytes (optional).
+    # Type: string
+    chunk_size: ""
+
+    # Maximum single blob size (optional).
+    # Type: string
+    max_blob_size: ""
+
+    # Max HTTP connections to S3 (optional).
+    # Type: string
+    max_connections: ""
+
+    # Retry count for S3 errors.
+    # Type: string
+    max_error_retry: "5"
+
+    # Use path-style URLs (required for MinIO and most S3-compatible).
+    # Type: bool
+    path_style_access: false
+
+    # Server-side encryption: "" (none), "S3" (AES-256), "KMS" (AWS KMS).
+    # Type: string
+    encryption: ""
+
+    # KMS key ID (required when encryption: KMS).
+    # Type: string
+    sse_kms_key_id: ""
+
+
+###############################################################################
+# SECTION 6 — BLOB STORES
+###############################################################################
+# Blob stores are the storage layer for repository content.
+# CRITICAL: blob stores MUST exist BEFORE repositories that reference them.
+# The first entry becomes the default for repos without an explicit mapping.
+#
+# Types: "file" (local), "s3" (AWS / MinIO)
+# Naming convention: {format}-{purpose}  e.g. docker-blobs, maven-data
+
+nexus_blobstores:
+  # ── Default: local filesystem ──
+  - name: default
+    # Type: string  |  Valid: file, s3
+    type: file
+    # Soft quota — reject new writes when exceeded; existing data safe.
+    # Format: "{size}{unit}"  |  "" = unlimited
+    # Type: string
+    soft_quota: ""
+    file:
+      # Directory for this blob store.
+      # Type: string
+      path: /data/nexus
+
+  # ── Example: Docker blobs on S3 ──
+  # - name: docker-blobs
+  #   type: s3
+  #   soft_quota: 500GB
+  #   s3:
+  #     region: us-east-1
+  #     bucket: "{{ vault_nexus_docker_bucket }}"
+  #     access_key_id: "{{ vault_s3_access_key }}"
+  #     secret_access_key: "{{ vault_s3_secret_key }}"
+  #     endpoint: ""
+  #     path_style_access: false
+
+  # ── Example: Maven on dedicated local disk ──
+  # - name: maven-storage
+  #   type: file
+  #   soft_quota: 1TB
+  #   file:
+  #     path: /data/nexus/maven
+
+  # ── Example: Backups on MinIO ──
+  # - name: backup-storage
+  #   type: s3
+  #   soft_quota: 2TB
+  #   s3:
+  #     region: us-east-1
+  #     bucket: nexus-backups
+  #     access_key_id: "{{ vault_minio_access_key }}"
+  #     secret_access_key: "{{ vault_minio_secret_key }}"
+  #     endpoint: "http://minio.internal:9000"
+  #     path_style_access: true
+
+
+###############################################################################
+# SECTION 7 — REPOSITORY ↔ BLOB STORE MAPPING
+###############################################################################
+# Controls which blob store each repository uses.
+#
+# Resolution order:
+#   1. nexus_repo_blobstore_map[repo_name]  — explicit mapping
+#   2. nexus_format_blobstore_defaults[format] — per-format default
+#   3. "default" — fallback blob store name
+#
+# Automatic creation:
+#   When nexus_auto_create_blobstores is true, any referenced blob store
+#   that does not yet exist is created automatically using the naming
+#   pattern defined in nexus_blobstore_naming_pattern.
+
+# Explicit repo → blob store mapping.
+# Type: dict   Key: repo name   Value: blob store name
+nexus_repo_blobstore_map: {}
+  # maven-releases: maven-storage
+  # maven-snapshots: maven-storage
+  # docker-hosted: docker-blobs
+  # docker-proxy: docker-blobs
+  # npm-hosted: npm-storage
+  # npm-proxy: npm-storage
+
+# Default blob store per format.
+# Type: dict   Key: format name   Value: blob store name
+nexus_format_blobstore_defaults:
+  maven2: default
+  docker: default
+  npm: default
+  pypi: default
+  helm: default
+  raw: default
+  go: default
+  nuget: default
+  yum: default
+  apt: default
+  conan: default
+  cocoapods: default
+  r: default
+
+# Auto-create missing blob stores.
+# Type: bool
+nexus_auto_create_blobstores: false
+
+# Naming pattern for auto-created blob stores.
+# {format} is replaced with the repository format.
+# Type: string  |  Valid: "{format}-storage", "{format}-blobs", "{format}-data"
+nexus_blobstore_naming_pattern: "{format}-storage"
+
+
+###############################################################################
+# SECTION 8 — REPOSITORIES
+###############################################################################
+# Every repository is defined here as a list item.
+# Each item is a dict with COMMON fields + FORMAT-SPECIFIC fields.
+#
+# Common fields (all formats):
+#   name                    — unique repository name        (required)
+#   format                  — package format                (required)
+#   type                    — hosted | proxy | virtual      (required)
+#   blob_store_name         — target blob store             (optional, uses mapping)
+#   online                  — accessible to clients         (default: true)
+#   strict_content_validation — validate uploads            (default: true)
+#   cleanup_policy          — name of cleanup policy        (optional)
+#
+# Proxy-only fields:
+#   remote_url              — upstream repository URL       (required for proxy)
+#   cache_max_age_in_minutes — cache TTL in minutes         (default: 1440)
+#
+# Format-specific fields live at the same level as common fields.
+#
+# Supported formats: maven2, docker, npm, pypi, helm, raw, go, nuget,
+#                    yum, apt, conan, cocoapods, r, rubygems, composer,
+#                    gitlfs, conan2
+#
+# Deletion control:
+#   nexus_repos_delete_unmanaged — delete repos not listed here (DANGEROUS)
+#   nexus_repos_expected         — repos to keep even if unmanaged
+
+nexus_repos:
+  # ────────────────────────────────────────────────────
+  # MAVEN
+  # ────────────────────────────────────────────────────
+
+  - name: maven-releases
+    # Unique name used in API calls, CLI, and group membership.
+    # Type: string
+    format: maven2
+    # Package format identifier.
+    # Type: string  |  Valid: maven2, docker, npm, pypi, helm, raw, ...
+    type: hosted
+    # Repository type.
+    #   hosted  — store your own artifacts
+    #   proxy   — mirror a remote repository
+    #   virtual — aggregate (deprecated; use groups instead)
+    # Type: string
+    write_policy: allow_once
+    # Upload policy.
+    #   allow_once — each version deployed once (releases)
+    #   allow      — redeploy allowed (snapshots)
+    #   deny       — read-only
+    # Type: string
+    blob_store_name: default
+    # Override mapping; leave empty to use Section 7 mapping.
+    # Type: string
+    version_policy: release
+    # Maven version policy: "release" or "snapshot".
+    # Type: string
+    layout_policy: strict
+    # Maven layout enforcement: "strict" or "permissive".
+    # Type: string
+    strict_content_validation: true
+    # Reject artifacts that violate format rules.
+    # Type: bool
+    cleanup_policy: ""
+    # Name of a policy defined in Section 10. "" = no cleanup.
+    # Type: string
+
+  - name: maven-snapshots
+    format: maven2
+    type: hosted
+    write_policy: allow
+    blob_store_name: default
+    version_policy: snapshot
+    layout_policy: permissive
+    strict_content_validation: false
+    cleanup_policy: maven-snapshot-cleanup
+
+  - name: maven-central
+    format: maven2
+    type: proxy
+    remote_url: https://repo1.maven.org/maven2
+    blob_store_name: default
+    version_policy: release
+    layout_policy: permissive
+    strict_content_validation: true
+    cache_max_age_in_minutes: 1440
+    # How long (minutes) to cache remote artifacts before rechecking.
+    # Type: int
+    cleanup_policy: ""
+
+  # ────────────────────────────────────────────────────
+  # DOCKER
+  # ────────────────────────────────────────────────────
+
+  - name: docker-hosted
+    format: docker
+    type: hosted
+    write_policy: allow
+    blob_store_name: default
+    strict_content_validation: false
+    cleanup_policy: ""
+    v1_enabled: false
+    # Enable Docker Registry V1 API.
+    # Type: bool
+    force_basic_auth: false
+    # Require basic auth for push operations.
+    # Type: bool
+    http_port: 0
+    # Dedicated HTTP port for the Docker registry endpoint.
+    # 0 = use the main Nexus port (Section 2).
+    # Type: int
+    https_port: 0
+    # Dedicated HTTPS port.
+    # Type: int
+    compress: true
+    # Compress Docker image layers to save storage.
+    # Type: bool
+
+  - name: docker-proxy
+    format: docker
+    type: proxy
+    remote_url: https://registry-1.docker.io
+    blob_store_name: default
+    v1_enabled: false
+    force_basic_auth: false
+    compress: true
+    cache_max_age_in_minutes: 1440
+    cleanup_policy: ""
+    index_type: dockerhub
+    # Docker Hub index type.
+    #   dockerhub — public Docker Hub
+    #   registry  — custom registry (set index_url)
+    # Type: string
+    index_url: ""
+    # Custom index URL when index_type: registry.
+    # Type: string
+
+  # ────────────────────────────────────────────────────
+  # NPM
+  # ────────────────────────────────────────────────────
+
+  - name: npm-hosted
+    format: npm
+    type: hosted
+    write_policy: allow
+    blob_store_name: default
+    cleanup_policy: ""
+
+  - name: npm-proxy
+    format: npm
+    type: proxy
+    remote_url: https://registry.npmjs.org
+    blob_store_name: default
+    cache_max_age_in_minutes: 1440
+    cleanup_policy: ""
+
+  # ────────────────────────────────────────────────────
+  # PYPI
+  # ────────────────────────────────────────────────────
+
+  - name: pypi-hosted
+    format: pypi
+    type: hosted
+    write_policy: allow
+    blob_store_name: default
+    cleanup_policy: ""
+
+  - name: pypi-proxy
+    format: pypi
+    type: proxy
+    remote_url: https://pypi.org/simple
+    blob_store_name: default
+    cache_max_age_in_minutes: 1440
+    cleanup_policy: ""
+
+  # ────────────────────────────────────────────────────
+  # HELM
+  # ────────────────────────────────────────────────────
+
+  - name: helm-hosted
+    format: helm
+    type: hosted
+    write_policy: allow_once
+    blob_store_name: default
+    allow_redeploy: false
+    # Allow re-uploading the same chart version.
+    # Type: bool
+    cleanup_policy: ""
+
+  - name: helm-proxy
+    format: helm
+    type: proxy
+    remote_url: https://charts.helm.sh/stable
+    blob_store_name: default
+    cache_max_age_in_minutes: 1440
+    cleanup_policy: ""
+
+  # ────────────────────────────────────────────────────
+  # RAW
+  # ────────────────────────────────────────────────────
+
+  - name: raw-hosted
+    format: raw
+    type: hosted
+    write_policy: allow_once
+    blob_store_name: default
+    cleanup_policy: ""
+
+# ── Deletion control ──
+
+# Delete repos NOT listed above.
+# WARNING: will remove repos created manually or by other tools.
+# Type: bool
+nexus_repos_delete_unmanaged: false
+
+# Repos to preserve even when delete_unmanaged is true.
+# Type: list[string]
+nexus_repos_expected: []
+  # - public
+  # - built-in
+
+
+###############################################################################
+# SECTION 9 — REPOSITORY GROUPS
+###############################################################################
+# Groups merge multiple repos into a single virtual endpoint.
+# Clients point at the group URL; Nexus resolves to the correct repo.
+# Order matters: first match wins — put most-specific repos first.
+
+nexus_repo_groups:
+  - name: maven-public
+    # Group name (must be unique).
+    # Type: string
+    format: maven2
+    # Must match the format of member repos.
+    # Type: string
+    blob_store_name: default
+    # Blob store for group metadata.
+    # Type: string
+    strict_content_validation: true
+    # Validate content against format rules.
+    # Type: bool
+    member_repos:
+      # Ordered list of repository names (must exist in Section 8).
+      # Type: list[string]
+      - maven-releases
+      - maven-snapshots
+      - maven-central
+
+  - name: docker-group
+    format: docker
+    blob_store_name: default
+    v1_enabled: false
+    force_basic_auth: false
+    http_port: 0
+    https_port: 0
+    compress: true
+    member_repos:
+      - docker-hosted
+      - docker-proxy
+
+  - name: npm-group
+    format: npm
+    blob_store_name: default
+    member_repos:
+      - npm-hosted
+      - npm-proxy
+
+  - name: pypi-group
+    format: pypi
+    blob_store_name: default
+    member_repos:
+      - pypi-hosted
+      - pypi-proxy
+
+  - name: helm-group
+    format: helm
+    blob_store_name: default
+    member_repos:
+      - helm-hosted
+      - helm-proxy
+
+# Delete groups not listed above.
+# Type: bool
+nexus_repo_groups_delete_unmanaged: false
+
+
+###############################################################################
+# SECTION 10 — CLEANUP POLICIES
+###############################################################################
+# Automatic deletion of old or unused artifacts.
+# Attach a policy to a repository via the cleanup_policy field in Section 8.
+#
+# Cron format (Quartz): "s m h dom month dow"
+#   "0 0 2 * * ?"  → daily at 02:00
+#   "0 0 */6 * * ?" → every 6 hours
+#
+# age_unit valid values: minutes, hours, days, weeks, months
+
+nexus_cleanup_policies:
+  - name: maven-snapshot-cleanup
+    # Policy name — referenced by repos in Section 8.
+    # Type: string
+    format: maven2
+    # Repository format this policy targets.
+    # Type: string
+    repo: maven-snapshots
+    # Target repository name (must exist in Section 8).
+    # Type: string
+    age: 30
+    # Delete artifacts older than this many age_units.
+    # Type: int
+    age_unit: days
+    # Time unit for age threshold.
+    # Type: string  |  Valid: minutes, hours, days, weeks, months
+    deployer: false
+    # Include artifacts deployed via Nexus UI/API.
+    # Type: bool
+    pre_release: true
+    # Include pre-release versions.
+    # Type: bool
+    alpha: true
+    # Include alpha versions.
+    # Type: bool
+    beta: true
+    # Include beta versions.
+    # Type: bool
+    cron: "0 0 2 * * ?"
+    # When to run the cleanup task.
+    # Type: string (Quartz cron)
+
+  - name: docker-cleanup
+    format: docker
+    repo: docker-hosted
+    age: 90
+    age_unit: days
+    deployer: true
+    pre_release: false
+    alpha: false
+    beta: false
+    cron: "0 0 3 * * ?"
+
+  - name: npm-cleanup
+    format: npm
+    repo: npm-hosted
+    age: 60
+    age_unit: days
+    deployer: true
+    pre_release: false
+    alpha: false
+    beta: false
+    cron: "0 0 4 * * ?"
+
+  - name: pypi-cleanup
+    format: pypi
+    repo: pypi-hosted
+    age: 90
+    age_unit: days
+    deployer: true
+    pre_release: false
+    alpha: false
+    beta: false
+    cron: "0 0 5 * * ?"
+
+
+###############################################################################
+# SECTION 11 — SECURITY
+###############################################################################
+# Core security: admin credentials, anonymous access, active realms.
+
+# Admin username.
+# Type: string
+nexus_admin_user: admin
+
+# Admin password.
+# CRITICAL: never commit plaintext to git. Use vault:
+#   password: "{{ vault_nexus_admin_password }}"
+# Type: string (sensitive)  |  Required
+nexus_admin_password: ""
+
+# Validate SSL certificates for outbound HTTPS calls.
+# Set false for self-signed certs in dev/test.
+# Type: bool
+nexus_validate_certs: true
+
+# Anonymous access — allow unauthenticated reads.
+# WARNING: disable in production.
+# Type: bool
+nexus_anonymous_access_enabled: false
+
+# Anonymous user ID.
+# Type: string
+nexus_anonymous_user: anonymous
+
+# Anonymous realm.
+# Type: string
+nexus_anonymous_realm: "nx-anonymous"
+
+# Active security realms (processed in order).
+# Available:
+#   NexusAuthenticatingRealm — internal user DB
+#   NexusAuthoringRealm       — RBAC
+#   LdapRealm                 — LDAP authentication
+#   DockerToken               — Docker bearer token
+#   BearerToken               — API token
+#   npmToken                  — npm auth
+# Type: list[string]
+nexus_realms:
+  - NexusAuthenticatingRealm
+  - NexusAuthoringRealm
+
+
+###############################################################################
+# SECTION 12 — USERS
+###############################################################################
+# Additional Nexus users (admin is always created automatically).
+# Users are created on every run — idempotent.
+#
+# Passwords should reference vault:
+#   password: "{{ vault_developer_password }}"
+
+nexus_users: []
+  # ── Example: developer ──
+  # - userId: developer
+  #   # Unique user ID (required).
+  #   # Type: string
+  #   first_name: Dev
+  #   # Display first name.
+  #   # Type: string
+  #   last_name: User
+  #   # Display last name.
+  #   # Type: string
+  #   email: dev@example.com
+  #   # Contact email.
+  #   # Type: string
+  #   password: "{{ vault_developer_password }}"
+  #   # Initial password (sensitive).
+  #   # Type: string
+  #   status: active
+  #   # Account status: active, disabled.
+  #   # Type: string
+  #   roles:
+  #     # List of role IDs to assign (must exist in Section 13 or built-in).
+  #     # Type: list[string]
+  #     - nx-developer
+  #
+  # ── Example: CI/CD deployer ──
+  # - userId: ci-deployer
+  #   first_name: CI
+  #   last_name: Deployer
+  #   email: ci@example.com
+  #   password: "{{ vault_ci_password }}"
+  #   status: active
+  #   roles:
+  #     - nx-deployer
+  #
+  # ── Example: read-only ──
+  # - userId: readonly
+  #   first_name: Read
+  #   last_name: Only
+  #   email: readonly@example.com
+  #   password: "{{ vault_readonly_password }}"
+  #   status: active
+  #   roles:
+  #     - nx-reader
+
+
+###############################################################################
+# SECTION 13 — ROLES & PRIVILEGES
+###############################################################################
+# Custom Nexus roles with privilege assignments.
+#
+# Privilege format:
+#   nx-repository-view-{format}-{repo}-{action}
+#
+# Actions:
+#   browse — view in UI
+#   read   — download artifacts
+#   add    — upload artifacts
+#   edit   — modify metadata
+#   delete — remove artifacts
+#   *      — all actions
+#
+# Built-in roles (do not redefine):
+#   nx-admin           — full admin
+#   nx-anonymous       — anonymous read
+#   nx-developer       — read/write all repos
+#   nx-repository-admin — repo management
+#   nx-repository-view  — repo browsing
+
+nexus_roles: []
+  # ── Example: developer ──
+  # - roleId: nx-developer
+  #   # Unique role ID (required).
+  #   # Type: string
+  #   name: Developer
+  #   # Display name.
+  #   # Type: string
+  #   description: Developer role with read/write access
+  #   # Description shown in Nexus UI.
+  #   # Type: string
+  #   privileges:
+  #     # List of privilege IDs.
+  #     # Type: list[string]
+  #     - "nx-repository-view-maven2-maven-releases-*"
+  #     - "nx-repository-view-maven2-maven-snapshots-*"
+  #     - "nx-repository-view-docker-docker-hosted-*"
+  #     - "nx-repository-view-npm-npm-hosted-*"
+  #   roles:
+  #     # Inherit privileges from other roles (optional).
+  #     # Type: list[string]
+  #     []
+  #
+  # ── Example: CI deployer (upload only) ──
+  # - roleId: nx-deployer
+  #   name: CI/CD Deployer
+  #   description: Deploy artifacts, no delete
+  #   privileges:
+  #     - "nx-repository-view-maven2-maven-releases-browse"
+  #     - "nx-repository-view-maven2-maven-releases-read"
+  #     - "nx-repository-view-maven2-maven-releases-add"
+  #     - "nx-repository-view-maven2-maven-snapshots-*"
+  #     - "nx-repository-view-docker-docker-hosted-browse"
+  #     - "nx-repository-view-docker-docker-hosted-read"
+  #     - "nx-repository-view-docker-docker-hosted-add"
+  #   roles: []
+  #
+  # ── Example: read-only everywhere ──
+  # - roleId: nx-reader
+  #   name: Read Only
+  #   description: Read-only access to all repositories
+  #   privileges:
+  #     - "nx-repository-view-*-*-*"
+  #   roles: []
+
+
+###############################################################################
+# SECTION 14 — LDAP
+###############################################################################
+# LDAP / Active Directory integration.
+# When enabled, users authenticate against the LDAP directory.
+# Nexus users (Section 12) are still needed to assign roles,
+# or use LDAP group mapping (nexus_ldap_group_mapping) for auto-assignment.
+
+nexus_ldap_enabled: false
+
+nexus_ldap:
+  # Display name in Nexus UI.
+  # Type: string
+  name: "Corporate LDAP"
+
+  # Protocol: ldap (port 389) or ldaps (port 636).
+  # Type: string
+  protocol: ldap
+
+  # LDAP server hostname or IP.
+  # Type: string
+  host: "ldap.example.com"
+
+  # LDAP port.
+  # Type: int
+  port: 389
+
+  # Base DN for all lookups.
+  # Type: string  |  Example: "dc=example,dc=com"
+  base_dn: ""
+
+  # Bind DN — the service account used to search for users.
+  # Type: string  |  Example: "cn=nexus,ou=service,dc=example,dc=com"
+  bind_dn: ""
+
+  # Bind password (sensitive).
+  # Type: string
+  bind_password: ""
+
+  # ── User search ──
+  user_base_dn: ""
+  # Relative to base_dn.  |  Example: "ou=people"
+  # Type: string
+
+  user_object_class: "inetOrgPerson"
+  # OpenLDAP: "inetOrgPerson"  |  AD: "person"
+  # Type: string
+
+  user_id_attribute: "uid"
+  # The attribute used as login username.
+  # OpenLDAP: "uid"  |  AD: "sAMAccountName"
+  # Type: string
+
+  user_real_name_attribute: "cn"
+  # Type: string
+
+  user_email_attribute: "mail"
+  # Type: string
+
+  usermemberOfAttribute: "memberOf"
+  # Used for group membership lookups.
+  # Type: string
+
+  # ── Group search ──
+  group_base_dn: ""
+  # Relative to base_dn.  |  Example: "ou=groups"
+  # Type: string
+
+  group_object_class: "groupOfNames"
+  # OpenLDAP: "groupOfNames"  |  AD: "group"
+  # Type: string
+
+  group_id_attribute: "cn"
+  # Type: string
+
+  group_member_attribute: "member"
+  # Type: string
+
+  group_memberof_attribute: ""
+  # Type: string
+
+  # ── Connection ──
+  authentication_method: simple
+  # "simple" (password) or "none" (anonymous bind).
+  # Type: string
+
+  ssl: false
+  # Use LDAPS (port 636).
+  # Type: bool
+
+  start_tls: false
+  # Upgrade plain LDAP to TLS mid-connection.
+  # Type: bool
+
+# Map LDAP groups to Nexus roles.
+# Users in the LDAP group automatically receive the Nexus role.
+nexus_ldap_group_mapping: []
+  # - ldap_group: "cn=developers,ou=groups,dc=example,dc=com"
+  #   # Full DN of the LDAP group.
+  #   # Type: string
+  #   nexus_role: nx-developer
+  #   # Nexus role ID (must exist in Section 13 or be built-in).
+  #   # Type: string
+  # - ldap_group: "cn=ci-deployers,ou=groups,dc=example,dc=com"
+  #   nexus_role: nx-deployer
+
+
+###############################################################################
+# SECTION 15 — TLS / HTTPS
+###############################################################################
+# SSL/TLS for the Nexus web interface and API.
+#
+# Three deployment patterns:
+#   1. Nexus terminates TLS (this section)
+#   2. Reverse proxy terminates TLS (Nginx/HAProxy) — leave this disabled
+#   3. Let's Encrypt — requires certbot pre-installed
+#
+# Keystore formats: PKCS12 (recommended), JKS
+
+nexus_ssl_enabled: false
+
+# Path to the keystore containing the server certificate + private key.
+# Type: string  |  Example: "/etc/nexus/ssl/nexus.p12"
+nexus_ssl_keystore: ""
+
+# Path to the truststore with trusted CA certificates.
+# Type: string
+nexus_ssl_truststore: ""
+
+# Keystore / truststore password.
+# Type: string (sensitive)
+nexus_ssl_password: ""
+
+# HTTPS listen port.
+# Type: int
+nexus_ssl_host_port: 8443
+
+# Generate a self-signed certificate automatically.
+# WARNING: browsers will show security warning. For dev/test only.
+# Type: bool
+nexus_ssl_self_signed: false
+
+# Let's Encrypt integration (requires certbot pre-installed).
+nexus_ssl_letsencrypt:
+  # Enable automatic certificate provisioning.
+  # Type: bool
+  enabled: false
+
+  # Contact email for Let's Encrypt notifications.
+  # Type: string
+  email: ""
+
+  # Domain names for the certificate (SANs).
+  # Type: list[string]
+  domains: []
+    # - nexus.example.com
+    # - nexus.internal.example.com
+
+
+###############################################################################
+# SECTION 16 — PROXY (OUTBOUND)
+###############################################################################
+# HTTP/HTTPS proxy for Nexus to reach remote repositories.
+# Applies to all proxy repos (maven-central, docker-proxy, npm-proxy, ...).
+# This is NOT for clients reaching Nexus — that is a reverse proxy concern.
+
+nexus_proxy_enabled: false
+
+# ── HTTP proxy ──
+nexus_http_proxy_host: ""
+  # Proxy hostname or IP.
+  # Type: string
+nexus_http_proxy_port: 80
+  # Type: int
+nexus_http_proxy_username: ""
+  # Auth username (optional).
+  # Type: string
+nexus_http_proxy_password: ""
+  # Auth password (sensitive).
+  # Type: string
+
+# ── HTTPS proxy ──
+nexus_https_proxy_host: ""
+  # Type: string
+nexus_https_proxy_port: 443
+  # Type: int
+nexus_https_proxy_username: ""
+  # Type: string
+nexus_https_proxy_password: ""
+  # Type: string (sensitive)
+
+# Bypass proxy for these destinations.
+# Type: string  |  Format: comma-separated, supports CIDR
+nexus_no_proxy_hosts: "localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+# Per-repository proxy overrides.
+# Allows different proxy settings for specific repos.
+# Type: dict  |  Key: repo name  Value: proxy settings dict
+nexus_repo_proxy_overrides: {}
+  # docker-proxy:
+  #   http_proxy_host: "docker-proxy.example.com"
+  #   http_proxy_port: 8080
+  #   no_proxy_hosts: "registry.internal,10.0.0.0/8"
+
+
+###############################################################################
+# SECTION 17 — SMTP
+###############################################################################
+# Email server for Nexus notifications (task alerts, security events, errors).
+
+nexus_smtp_host: ""
+  # SMTP server hostname.
+  # Type: string
+  # Example: "smtp.example.com"
+
+nexus_smtp_port: 25
+  # Common: 25 (plain), 465 (SSL), 587 (STARTTLS).
+  # Type: int
+
+nexus_smtp_from_address: ""
+  # Sender address.
+  # Type: string
+  # Example: "nexus@example.com"
+
+nexus_smtp_username: ""
+  # Auth username (optional).
+  # Type: string
+
+nexus_smtp_password: ""
+  # Auth password (sensitive).
+  # Type: string
+
+nexus_smtp_ssl: false
+  # Use implicit SSL.
+  # Type: bool
+
+nexus_smtp_starttls: false
+  # Use STARTTLS upgrade.
+  # Type: bool
+
+
+###############################################################################
+# SECTION 18 — LOGGING
+###############################################################################
+# Nexus application logging.
+
+# Log level.
+# Type: string  |  Valid: TRACE, DEBUG, INFO, WARN, ERROR
+nexus_log_level: INFO
+
+# Logback pattern.
+# Type: string
+nexus_log_pattern: "%d{ISO8601} [%t] %-5level %logger{36} - %msg%n"
+
+# Max size per log file before rotation.
+# Type: string
+nexus_log_max_size: "10 MB"
+
+# Number of rotated files to keep.
+# Type: int
+nexus_log_max_files: 5
+
+# Audit logging (tracks all API calls and admin actions).
+# Type: bool
+nexus_audit_log_enabled: true
+
+# Audit log directory.
+# Type: string
+nexus_audit_log_dir: "{{ nexus_data_dir }}/log"
+
+
+###############################################################################
+# SECTION 19 — BACKUP
+###############################################################################
+# Automated backup of Nexus data, database, and blob stores.
+
+nexus_backup_enabled: false
+
+# Destination directory for backup archives.
+# Type: string
+nexus_backup_dir: /var/nexus/backup
+
+# Temporary working directory during backup.
+# Type: string
+nexus_backup_temp_dir: /tmp/nexus-backup
+
+# ── Retention ──
+nexus_backup_retention_days: 30
+  # Delete backups older than N days.
+  # Type: int
+nexus_backup_retention_count: 10
+  # Keep at most N backup files.
+  # Type: int
+
+# ── What to include ──
+nexus_backup_include_blobs: true
+  # Include blob stores (can be very large).
+  # Type: bool
+nexus_backup_include_db: true
+  # Include Orient database.
+  # Type: bool
+nexus_backup_include_config: true
+  # Include configuration files.
+  # Type: bool
+
+# Compress archives with gzip.
+# Type: bool
+nexus_backup_compress: true
+
+# ── Cron schedule ──
+nexus_backup_cron_enabled: false
+  # Enable automated backup via cron.
+  # Type: bool
+nexus_backup_cron_schedule: "0 2 * * *"
+  # System cron format: "minute hour day month weekday"
+  # Default: daily at 02:00.
+  # Type: string
+
+# ── S3 destination (optional) ──
+nexus_backup_s3_enabled: false
+nexus_backup_s3_bucket: ""
+  # S3 bucket name.
+  # Type: string
+nexus_backup_s3_prefix: "nexus-backups"
+  # Key prefix inside the bucket.
+  # Type: string
+nexus_backup_s3_endpoint: ""
+  # S3 endpoint URL (empty = AWS default).
+  # Type: string
+nexus_backup_s3_access_key: ""
+nexus_backup_s3_secret_key: ""
+
+# ── NFS destination (optional) ──
+nexus_backup_nfs_enabled: false
+nexus_backup_nfs_mount: ""
+  # NFS mount point (e.g. "nfsserver:/exports/nexus-backups").
+  # Type: string
+
+# ── Notifications ──
+nexus_backup_notify_enabled: false
+nexus_backup_notify_email: ""
+  # Send email on backup completion/failure.
+  # Type: string
+nexus_backup_notify_webhook: ""
+  # POST to webhook URL on completion/failure.
+  # Type: string
+
+
+###############################################################################
+# SECTION 20 — RESTORE
+###############################################################################
+# Restore Nexus from a backup archive.
+
+# Path to the backup .tar.gz file.
+# Type: string  |  Required for restore playbook
+nexus_restore_source: ""
+
+# Verify checksum before restoring.
+# Type: bool
+nexus_restore_validate: true
+
+# Create a snapshot before overwriting data (for manual rollback).
+# Type: bool
+nexus_restore_pre_snapshot: true
+
+# Verify Nexus starts successfully after restore.
+# Type: bool
+nexus_restore_post_check: true
+
+
+###############################################################################
+# SECTION 21 — UPGRADE
+###############################################################################
+# Upgrade Nexus to a new version.
+
+# Create backup before upgrade.
+# Type: bool
+nexus_upgrade_backup_before: true
+
+# Rollback automatically if health check fails after upgrade.
+# Type: bool
+nexus_upgrade_rollback_on_failure: true
+
+# Skip upgrade if current version already matches nexus_version.
+# Type: bool
+nexus_upgrade_skip_if_current: true
+
+# Run health checks after upgrade.
+# Type: bool
+nexus_upgrade_validate_after: true
+
+# Timeout in seconds waiting for Nexus to start after upgrade.
+# Type: int
+nexus_upgrade_timeout: 600
+
+
+###############################################################################
+# SECTION 22 — VALIDATION
+###############################################################################
+# Post-deployment and post-upgrade health checks.
+
+nexus_validation_enabled: true
+
+# Retries for each health check.
+# Type: int
+nexus_validation_retries: 30
+
+# Seconds between retries.
+# Type: int
+nexus_validation_delay: 10
+
+# Which checks to perform.
+# Available:
+#   api_health              — Nexus API responds 200
+#   repository_readiness    — all defined repos accessible
+#   blobstore_connectivity  — all blob stores healthy
+#   disk_space              — sufficient disk space
+#   ssl_certificate         — SSL cert validity (when TLS enabled)
+# Type: list[string]
+nexus_validation_checks:
+  - api_health
+  - repository_readiness
+  - blobstore_connectivity
+
+# Minimum free disk space (GB). Check fails if less is available.
+# Type: int
+nexus_validation_min_disk_gb: 10
+
+
+###############################################################################
+# SECTION 23 — MINIO
+###############################################################################
+# MinIO server for S3-compatible blob storage.
+# Install alongside Nexus when you want local S3 without AWS.
+
+nexus_minio_enabled: false
+
+# MinIO release version.
+# Type: string  |  Example: "RELEASE.2024-01-16T16-07-38Z"
+nexus_minio_version: "RELEASE.2024-01-16T16-07-38Z"
+
+# File system paths.
+# Type: string
+nexus_minio_install_dir: /usr/local/bin
+nexus_minio_data_dir: /data/minio
+nexus_minio_config_dir: /etc/minio
+
+# Service user / group.
+# Type: string
+nexus_minio_user: minio
+nexus_minio_group: minio
+
+# Ports.
+# Type: int
+nexus_minio_port: 9000
+nexus_minio_console_port: 9001
+
+# Listen addresses (include colon for port binding).
+# Type: string
+nexus_minio_listen_address: ":{{ nexus_minio_port }}"
+nexus_minio_console_listen_address: ":{{ nexus_minio_console_port }}"
+
+# Root credentials — change in production!
+# Type: string (sensitive)
+nexus_minio_access_key: ""
+nexus_minio_secret_key: ""
+
+# Data volumes for multi-disk erasure coding.
+# Space-separated list of mount points.
+# Type: string  |  Example: "/data1 /data2 /data3 /data4"
+nexus_minio_volumes: ""
+
+# TLS.
+# Type: bool
+nexus_minio_tls_enabled: false
+nexus_minio_cert_dir: /etc/minio/certs
+
+# Service management.
+# Type: bool / string
+nexus_minio_service_enabled: true
+nexus_minio_service_state: started
+
+# ── Buckets to auto-create ──
+nexus_minio_buckets:
+  - name: nexus-blobs
+    # Bucket name (must be globally unique within MinIO).
+    # Type: string
+    versioning: false
+    # Enable object versioning.
+    # Type: bool
+
+  # - name: nexus-backups
+  #   versioning: true
+
+
+###############################################################################
+# SECTION 24 — DOCKER DEPLOYMENT
+###############################################################################
+# Alternative to bare-metal installation.
+# When enabled, Nexus runs in a Docker container instead of a systemd service.
+# All other configuration (repos, security, etc.) still applies.
+
+nexus_docker_enabled: false
+
+# Docker image and tag.
+# Type: string
+nexus_docker_image: "sonatype/nexus3"
+nexus_docker_tag: "{{ nexus_version }}"
+
+# Container name.
+# Type: string
+nexus_docker_container_name: nexus
+
+# Network mode.
+#   "host"   — use host networking (recommended, simplest)
+#   "bridge" — Docker bridge (requires port mapping)
+# Type: string
+nexus_docker_network_mode: host
+
+# Port mappings (only used when network_mode: bridge).
+# Type: list[string]
+nexus_docker_ports:
+  - "{{ nexus_port }}:8081"
+
+# Volume mounts.
+# Type: list[string]
+nexus_docker_volumes:
+  - "{{ nexus_data_dir }}/data:/nexus-data"
+  - "{{ nexus_data_dir }}/logs:/nexus-data/log"
+
+# Additional environment variables.
+# Type: dict
+# Example: INSTALL4J_ADD_VM_PARAMS for JVM tuning inside the container.
+nexus_docker_env: {}
+  # INSTALL4J_ADD_VM_PARAMS: "-Xms2g -Xmx2g"
+
+# Restart policy.
+# Type: string  |  Valid: no, on-failure, always, unless-stopped
+nexus_docker_restart_policy: unless-stopped
+
+# Resource limits.
+nexus_docker_memory_limit: ""
+  # Container memory limit.
+  # Type: string  |  Example: "8g"
+nexus_docker_cpus: ""
+  # CPU limit.
+  # Type: string  |  Example: "4"
+
+
+###############################################################################
+# SECTION 25 — SYSTEM PREREQUISITES
+###############################################################################
+# OS-level packages, kernel tuning, and user setup.
+
+# Packages to install on every Nexus host.
+# Type: list[string]
+nexus_common_packages:
+  - curl
+  - wget
+  - unzip
+  - tar
+  - python3
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - chrony
+  - net-tools
+  - htop
+
+# Create the nexus system user/group.
+# Type: bool
+nexus_create_user: true
+
+# Java version to install.
+# Type: string  |  Valid: "11", "17", "21"
+nexus_java_version: "17"
+
+# Java package state.
+# Type: string  |  Valid: present, latest
+nexus_java_package_state: present
+
+# Set system hostname from nexus_hostname.
+# Type: bool
+nexus_set_hostname: false
+
+# System timezone.
+# Type: string  |  Example: "UTC", "America/New_York", "Europe/Berlin"
+nexus_timezone: UTC
+
+# Enable NTP (chrony).
+# Type: bool
+nexus_ntp_enabled: true
+
+# OS resource limits for the nexus user.
+# Type: int
+nexus_limits_nofile: 65536
+nexus_limits_nproc: 65536
+
+# Kernel parameters.
+# Type: dict
+nexus_sysctl:
+  vm.max_map_count: 262144
+  # Required by Elasticsearch / OrientDB.
+  net.core.somaxconn: 65535
+  # Max socket connection backlog.
+  net.ipv4.tcp_max_syn_backlog: 65535

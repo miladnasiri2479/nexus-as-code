@@ -1,0 +1,19 @@
+---
+nexus_healthcheck_enabled: true
+nexus_healthcheck_checks:
+  - api
+  - disk
+  - service
+  - port
+nexus_healthcheck_api_path: /service/rest/v1/status
+nexus_healthcheck_api_retries: 5
+nexus_healthcheck_api_delay: 10
+nexus_healthcheck_api_timeout: 5
+nexus_healthcheck_api_expected_status: 200
+nexus_healthcheck_disk_min_free_gb: 10
+nexus_healthcheck_disk_warn_percent: 80
+nexus_healthcheck_service_name: nexus
+nexus_healthcheck_port: 8081
+nexus_healthcheck_host: "localhost"
+nexus_healthcheck_fail_on_error: true
+nexus_data_dir: /var/nexus/data

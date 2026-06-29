@@ -1,4 +1,117 @@
 ---
-# roles/nexus_blobstores/defaults/main.yml
-# All variables are securely managed in group_vars/all.yml
-# Do not store secrets here.
+###############################################################################
+# nexus_blobstores — defaults
+#
+# Blob store configuration. All values from group_vars.
+# No hardcoded values in tasks — everything reads from this file.
+###############################################################################
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BLOB STORES
+# ──────────────────────────────────────────────────────────────────────────────
+
+# List of blob stores to create.
+# Type: list[dict]
+# Each dict: { name, type, soft_quota, file: { path }, s3: { ... } }
+nexus_blobstores: []
+
+# Delete blob stores not defined in nexus_blobstores.
+# WARNING: destructive.
+# Type: bool
+nexus_blobstores_delete_unmanaged: false
+
+# Valid blobstore types.
+# Type: list[string]
+nexus_blobstore_valid_types:
+  - file
+  - s3
+
+# ──────────────────────────────────────────────────────────────────────────────
+# API CONNECTION
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Admin credentials.
+# Type: string
+nexus_admin_user: admin
+nexus_admin_password: ""
+
+# Validate SSL certificates.
+# Type: bool
+nexus_validate_certs: true
+
+# Nexus API connection.
+# Type: string/int
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_api_scheme: http
+nexus_api_version: v1
+nexus_api_timeout: 30
+
+# API retry settings.
+# Type: int
+nexus_api_retries: 3
+nexus_api_retry_delay: 5
+
+# Computed API base URL.
+# Type: string (derived)
+nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STORAGE DEFAULTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Storage type fallback.
+# Type: string
+nexus_storage_type: file
+
+# Local storage path fallback.
+# Type: string
+nexus_storage_local_path: /data/nexus
+
+# S3 defaults.
+# Type: string
+nexus_storage_s3_region: us-east-1
+nexus_storage_s3_max_error_retry: "5"
+nexus_storage_s3_path_style_access: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# COMPUTED URLs
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Blobstore API URLs.
+# Type: string (derived)
+nexus_blobstores_list_url: "{{ nexus_api_base_url }}/blobstores"
+nexus_blobstores_file_url: "{{ nexus_api_base_url }}/blobstores/file"
+nexus_blobstores_s3_url: "{{ nexus_api_base_url }}/blobstores/s3"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OPERATIONAL SETTINGS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Run once in multi-host deployments.
+# Type: bool
+nexus_blobstores_run_once: false
+
+# Delegate to specific host.
+# Type: string
+nexus_blobstores_delegate_to: ""
+
+# Async support.
+# Type: int
+nexus_blobstores_async: 0
+nexus_blobstores_poll: 0
+
+# Diff mode.
+# Type: bool
+nexus_blobstores_diff: true
+
+# Log sensitive variables.
+# Type: bool
+nexus_no_log: true
+
+# Proxy environment.
+# Type: string
+nexus_http_proxy: ""
+nexus_https_proxy: ""
+nexus_no_proxy: ""

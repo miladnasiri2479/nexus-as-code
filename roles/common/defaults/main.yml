@@ -1,0 +1,25 @@
+---
+nexus_common_packages:
+  - curl
+  - wget
+  - unzip
+  - tar
+  - python3
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - chrony
+  - net-tools
+  - htop
+nexus_create_user: true
+nexus_runas_user: nexus
+nexus_runas_group: nexus
+nexus_install_dir: /opt/sonatype
+nexus_data_dir: /var/nexus/data
+nexus_temp_dir: /var/nexus/tmp
+nexus_work_dir: /var/nexus/scratch
+nexus_limits_nofile: 65536
+nexus_limits_nproc: 65536
+nexus_set_hostname: false
+nexus_timezone: UTC
+nexus_ntp_enabled: true

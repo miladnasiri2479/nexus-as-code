@@ -1,0 +1,129 @@
+#!/bin/bash
+# =============================================================================
+# Nexus Repository Manager — Backup Script
+# Managed by Ansible — DO NOT EDIT MANUALLY
+# Role: nexus_backup
+# =============================================================================
+
+set -euo pipefail
+
+BACKUP_DIR="{{ nexus_backup_dir }}"
+DATA_DIR="{{ nexus_data_dir }}"
+TEMP_DIR="{{ nexus_backup_temp_dir }}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_NAME="nexus-backup-${TIMESTAMP}"
+RETENTION_DAYS={{ nexus_backup_retention_days }}
+RETENTION_COUNT={{ nexus_backup_retention_count }}
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+cleanup() {
+    log "Cleaning up temporary files..."
+    rm -rf "${TEMP_DIR:?}/${BACKUP_NAME}"
+}
+
+trap cleanup EXIT
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --retention) RETENTION_DAYS="$2"; shift 2 ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
+    esac
+done
+
+log "Starting Nexus backup: ${BACKUP_NAME}"
+mkdir -p "${TEMP_DIR}/${BACKUP_NAME}"
+mkdir -p "${BACKUP_DIR}"
+
+{% if nexus_backup_include_db %}
+# ── Database ──
+log "Backing up database..."
+if [ -d "${DATA_DIR}/orient" ]; then
+    cp -a "${DATA_DIR}/orient" "${TEMP_DIR}/${BACKUP_NAME}/"
+    log "  Database backed up"
+else
+    log "  WARNING: Database directory not found"
+fi
+{% endif %}
+
+{% if nexus_backup_include_config %}
+# ── Configuration ──
+log "Backing up configuration..."
+if [ -d "${DATA_DIR}/etc" ]; then
+    cp -a "${DATA_DIR}/etc" "${TEMP_DIR}/${BACKUP_NAME}/"
+    log "  Configuration backed up"
+else
+    log "  WARNING: Configuration directory not found"
+fi
+{% endif %}
+
+{% if nexus_backup_include_blobs %}
+# ── Blob Stores ──
+log "Backing up blob stores..."
+if [ -d "${DATA_DIR}/blobs" ]; then
+    rsync -a --progress "${DATA_DIR}/blobs" "${TEMP_DIR}/${BACKUP_NAME}/" 2>/dev/null || \
+    cp -a "${DATA_DIR}/blobs" "${TEMP_DIR}/${BACKUP_NAME}/"
+    log "  Blob stores backed up"
+else
+    log "  WARNING: Blob store directory not found"
+fi
+{% endif %}
+
+# ── Create Archive ──
+log "Creating archive..."
+{% if nexus_backup_compress %}
+tar -czf "${BACKUP_DIR}/${BACKUP_NAME}.tar.gz" -C "${TEMP_DIR}" "${BACKUP_NAME}"
+ARCHIVE="${BACKUP_DIR}/${BACKUP_NAME}.tar.gz"
+{% else %}
+tar -cf "${BACKUP_DIR}/${BACKUP_NAME}.tar" -C "${TEMP_DIR}" "${BACKUP_NAME}"
+ARCHIVE="${BACKUP_DIR}/${BACKUP_NAME}.tar"
+{% endif %}
+
+# ── Checksum ──
+log "Generating checksum..."
+sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+
+# ── S3 Upload ──
+{% if nexus_backup_s3_enabled %}
+log "Uploading to S3..."
+aws s3 cp "${ARCHIVE}" \
+    "s3://{{ nexus_backup_s3_bucket }}/{{ nexus_backup_s3_prefix }}/${BACKUP_NAME}$(basename ${ARCHIVE##*.})" \
+    {% if nexus_backup_s3_endpoint != "" %}--endpoint-url "{{ nexus_backup_s3_endpoint }}"{% endif %}
+aws s3 cp "${ARCHIVE}.sha256" \
+    "s3://{{ nexus_backup_s3_bucket }}/{{ nexus_backup_s3_prefix }}/${BACKUP_NAME}$(basename ${ARCHIVE##*.}).sha256" \
+    {% if nexus_backup_s3_endpoint != "" %}--endpoint-url "{{ nexus_backup_s3_endpoint }}"{% endif %}
+log "  Uploaded to S3"
+{% endif %}
+
+# ── NFS Copy ──
+{% if nexus_backup_nfs_enabled %}
+log "Copying to NFS..."
+cp "${ARCHIVE}" "{{ nexus_backup_nfs_mount }}/" 2>/dev/null || log "  WARNING: NFS copy failed"
+cp "${ARCHIVE}.sha256" "{{ nexus_backup_nfs_mount }}/" 2>/dev/null || true
+{% endif %}
+
+# ── Retention Cleanup ──
+log "Cleaning up old backups (keeping ${RETENTION_DAYS} days / ${RETENTION_COUNT} files)..."
+find "${BACKUP_DIR}" -name "nexus-backup-*.tar*" -mtime +${RETENTION_DAYS} -delete 2>/dev/null || true
+ls -1t "${BACKUP_DIR}"/nexus-backup-*.tar* 2>/dev/null | tail -n +$((RETENTION_COUNT * 2 + 1)) | xargs rm -f 2>/dev/null || true
+
+# ── Notification ──
+{% if nexus_backup_notify_enabled %}
+{% if nexus_backup_notify_email != "" %}
+log "Sending email notification..."
+echo "Nexus backup completed: ${BACKUP_NAME}" | mail -s "Nexus Backup Success" {{ nexus_backup_notify_email }} 2>/dev/null || true
+{% endif %}
+{% if nexus_backup_notify_webhook != "" %}
+log "Sending webhook notification..."
+curl -X POST -H "Content-Type: application/json" \
+    -d "{\"status\":\"success\",\"backup\":\"${BACKUP_NAME}\",\"timestamp\":\"$(date -Iseconds)\"}" \
+    "{{ nexus_backup_notify_webhook }}" 2>/dev/null || true
+{% endif %}
+{% endif %}
+
+log "Backup completed successfully: ${BACKUP_NAME}"
+log "Archive: ${ARCHIVE}"
+log "Size: $(du -h "${ARCHIVE}" | cut -f1)"

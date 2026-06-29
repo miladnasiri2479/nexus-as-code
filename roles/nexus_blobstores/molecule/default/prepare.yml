@@ -1,0 +1,32 @@
+---
+- name: Prepare test environment
+  hosts: all
+  become: true
+  tasks:
+    - name: Install Java (required for Nexus)
+      ansible.builtin.apt:
+        name: openjdk-17-jdk
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Create nexus user
+      ansible.builtin.user:
+        name: nexus
+        shell: /sbin/nologin
+        system: true
+        create_home: false
+
+    - name: Create directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: nexus
+        group: nexus
+        mode: "0755"
+      loop:
+        - /opt/sonatype
+        - /var/nexus/data
+        - /var/nexus/tmp
+        - /var/nexus/scratch
+        - /data/nexus

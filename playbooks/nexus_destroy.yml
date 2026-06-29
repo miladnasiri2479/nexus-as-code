@@ -1,0 +1,171 @@
+---
+###############################################################################
+# Nexus as Code - Destroy Playbook
+# ============================================================================
+# Stop and remove Nexus installation.
+# REQUIRES USER CONFIRMATION BEFORE PROCEEDING.
+#
+# Usage:
+#   ansible-playbook -i inventories/production/inventory.yml playbooks/nexus_destroy.yml
+###############################################################################
+
+- name: Destroy Nexus Repository Manager
+  hosts: nexus
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display warning banner
+      ansible.builtin.debug:
+        msg:
+          - "╔══════════════════════════════════════════════════════════════╗"
+          - "║                    ⚠️  DESTRUCTIVE ACTION                   ║"
+          - "╠══════════════════════════════════════════════════════════════╣"
+          - "║  This playbook will PERMANENTLY remove:                     ║"
+          - "║  • Nexus service                                            ║"
+          - "║  • Nexus installation directory                             ║"
+          - "║  • Nexus data directory                                     ║"
+          - "║  • Nexus configuration files                                ║"
+          - "║  • Nexus logs                                               ║"
+          - "║                                                             ║"
+          - "║  This action CANNOT be undone!                              ║"
+          - "╚══════════════════════════════════════════════════════════════╝"
+      tags: [nexus, destroy]
+
+    - name: Confirm destruction
+      ansible.builtin.pause:
+        prompt: |
+          Are you SURE you want to destroy Nexus on {{ inventory_hostname }}?
+          Type 'YES DESTROY' to confirm (anything else will abort):
+      register: destroy_confirmation
+      tags: [nexus, destroy]
+
+    - name: Validate confirmation
+      ansible.builtin.assert:
+        that:
+          - destroy_confirmation.user_input | trim | upper == 'YES DESTROY'
+        fail_msg: |
+          ABORTED: Destruction cancelled.
+          You did not type 'YES DESTROY'.
+      tags: [nexus, destroy]
+
+    - name: Display proceeding message
+      ansible.builtin.debug:
+        msg: "✓ Confirmation received. Proceeding with destruction..."
+      tags: [nexus, destroy]
+
+  tasks:
+    - name: Stop Nexus service (systemd)
+      block:
+        - name: Stop service
+          ansible.builtin.systemd:
+            name: "{{ nexus_service_name }}"
+            state: stopped
+      rescue:
+        - name: Service may not exist
+          ansible.builtin.debug:
+            msg: "Service not found or already stopped"
+      when:
+        - nexus_destroy_service | bool
+        - nexus_install_method == 'binary'
+      tags: [nexus, destroy, service]
+
+    - name: Disable Nexus service
+      ansible.builtin.systemd:
+        name: "{{ nexus_service_name }}"
+        enabled: false
+      when:
+        - nexus_destroy_service | bool
+        - nexus_install_method == 'binary'
+      ignore_errors: true
+      tags: [nexus, destroy, service]
+
+    - name: Stop Docker container
+      block:
+        - name: Remove container
+          community.docker.docker_container:
+            name: "{{ nexus_docker_container_name }}"
+            state: absent
+      rescue:
+        - name: Container may not exist
+          ansible.builtin.debug:
+            msg: "Container not found or already removed"
+      when:
+        - nexus_destroy_service | bool
+        - nexus_install_method in ['docker', 'compose']
+      tags: [nexus, destroy, docker]
+
+    - name: Remove Nexus installation directory
+      ansible.builtin.file:
+        path: "{{ nexus_install_dir }}"
+        state: absent
+      when: nexus_destroy_install_dir | bool
+      tags: [nexus, destroy, files]
+
+    - name: Remove Nexus data directory
+      ansible.builtin.file:
+        path: "{{ nexus_data_dir }}"
+        state: absent
+      when: nexus_destroy_data_dir | bool
+      tags: [nexus, destroy, files]
+
+    - name: Remove systemd unit
+      ansible.builtin.file:
+        path: /etc/systemd/system/nexus.service
+        state: absent
+      when:
+        - nexus_destroy_config | bool
+        - nexus_install_method == 'binary'
+      tags: [nexus, destroy, config]
+
+    - name: Remove environment file
+      ansible.builtin.file:
+        path: /etc/default/nexus
+        state: absent
+      when: nexus_destroy_config | bool
+      tags: [nexus, destroy, config]
+
+    - name: Remove log directory
+      ansible.builtin.file:
+        path: /var/log/nexus
+        state: absent
+      when: nexus_destroy_logs | bool
+      tags: [nexus, destroy, logs]
+
+    - name: Remove backup directory
+      ansible.builtin.file:
+        path: "{{ nexus_backup_dir }}"
+        state: absent
+      when: nexus_destroy_backup | bool
+      tags: [nexus, destroy, backup]
+
+    - name: Remove nexus user
+      ansible.builtin.user:
+        name: "{{ nexus_runas_user }}"
+        state: absent
+        remove: true
+      when: nexus_destroy_user | bool
+      tags: [nexus, destroy, user]
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: nexus_install_method == 'binary'
+      tags: [nexus, destroy, systemd]
+
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "╔══════════════════════════════════════════════════════════════╗"
+          - "║               ✅ DESTRUCTION COMPLETE                        ║"
+          - "╠══════════════════════════════════════════════════════════════╣"
+          - "║  Service stopped: {{ nexus_destroy_service }}                          ║"
+          - "║  Install dir removed: {{ nexus_destroy_install_dir }}                    ║"
+          - "║  Data dir removed: {{ nexus_destroy_data_dir }}                           ║"
+          - "║  Config removed: {{ nexus_destroy_config }}                              ║"
+          - "║  Logs removed: {{ nexus_destroy_logs }}                                ║"
+          - "║  Backup removed: {{ nexus_destroy_backup }}                             ║"
+          - "║  User removed: {{ nexus_destroy_user }}                                ║"
+          - "╚══════════════════════════════════════════════════════════════╝"
+      tags: [nexus, destroy]

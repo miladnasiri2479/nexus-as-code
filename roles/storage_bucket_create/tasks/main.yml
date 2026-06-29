@@ -1,0 +1,103 @@
+---
+- name: Bucket Create | Display role info
+  ansible.builtin.debug:
+    msg: "Creating {{ nexus_buckets | length }} bucket(s)"
+  tags: [storage, buckets, create]
+
+- name: Bucket Create | Install mc client
+  ansible.builtin.get_url:
+    url: "https://dl.min.io/client/mc/release/linux-amd64/mc"
+    dest: /usr/local/bin/mc
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, mc]
+
+- name: Bucket Create | Configure mc alias
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc alias set {{ nexus_minio_alias }} {{ nexus_minio_endpoint }} {{ nexus_minio_access_key }} {{ nexus_minio_secret_key }}
+    executable: /bin/bash
+  register: _mc_alias_result
+  changed_when: "'added' in _mc_alias_result.stdout or 'Modified' in _mc_alias_result.stdout"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, mc]
+
+- name: Bucket Create | List existing buckets
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc ls {{ nexus_minio_alias }}/ 2>/dev/null | awk '{print $NF}' || echo ""
+    executable: /bin/bash
+  register: _existing_buckets
+  changed_when: false
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, list]
+
+- name: Bucket Create | Set existing buckets fact
+  ansible.builtin.set_fact:
+    _existing_bucket_list: "{{ _existing_buckets.stdout_lines | default([]) if (_existing_buckets is defined and _existing_buckets.stdout is defined) else [] }}"
+  tags: [storage, buckets, list]
+
+- name: Bucket Create | Create buckets
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc mb {{ nexus_minio_alias }}/{{ item.name }}
+    executable: /bin/bash
+  loop: "{{ nexus_buckets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_storage_minio.enabled | default(false)
+    - item.name not in _existing_bucket_list
+  register: _create_bucket_result
+  changed_when: "'created' in _create_bucket_result.stdout"
+  tags: [storage, buckets, create]
+
+- name: Bucket Create | Enable versioning
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc version enable {{ nexus_minio_alias }}/{{ item.name }}
+    executable: /bin/bash
+  loop: "{{ nexus_buckets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_storage_minio.enabled | default(false)
+    - item.versioning | default(false) | bool
+  register: _versioning_result
+  changed_when: "'versioning is enabled' in _versioning_result.stdout"
+  tags: [storage, buckets, versioning]
+
+- name: Bucket Create | List all buckets
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      /usr/local/bin/mc ls {{ nexus_minio_alias }}/ 2>/dev/null || echo "No buckets"
+    executable: /bin/bash
+  register: _final_buckets
+  changed_when: false
+  when:
+    - nexus_storage_type == 's3'
+    - nexus_storage_minio.enabled | default(false)
+  tags: [storage, buckets, verify]
+
+- name: Bucket Create | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[BUCKET-CREATE] Configuration Complete"
+      - "  Buckets: {{ nexus_buckets | length }}"
+      - "  Existing: {{ _existing_bucket_list | length }}"
+  tags: [storage, buckets, summary]

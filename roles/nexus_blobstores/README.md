@@ -1,33 +1,101 @@
-# Dynamic Nexus Blobstores Role
+# nexus_blobstores
 
-This role dynamically manages Sonatype Nexus blobstores via the REST API. It inherits its configuration context from the global `storage.type` variable.
+Create and manage Nexus Repository Manager blob stores.
 
-## Features
-- **Global Storage Context**: Determines the blobstore type based on `storage.type` (`file`, `s3`, or `minio`).
-- **Dictionary Driven**: Iterates over a dictionary of `blobstores`, automatically skipping those where `enabled: false`.
-- **S3 Prefix Mapping**: When using S3 or MinIO, it maps all blobstores to a single bucket (`storage.bucket`) and uses the blobstore's name as the bucket `prefix`. This is best practice for cost and organization.
-- **MinIO Ready**: Automatically sets `forcePathStyle: true` if `storage.type: minio`.
-- **Idempotent**: Fetches the list of existing blobstores first. Missing ones are `POST`ed. Existing ones are `PUT` updated.
+## Description
 
-## Variables
+This role creates and manages blob stores via the Nexus REST API.
+Supports file (local filesystem) and S3 storage backends.
 
-Define your blobstores and storage context in `group_vars/all.yml`:
+## Requirements
+
+- Nexus Repository Manager must be installed and running
+- Admin credentials must be set
+
+## Role Variables
+
+### Required
+
+| Variable | Description | Default |
+|---|---|---|
+| `nexus_admin_password` | Admin password | `""` |
+| `nexus_blobstores` | List of blob stores | `[]` |
+
+### Blob Store Structure
 
 ```yaml
-# Global context (validated by the `storage` role)
-storage:
-  type: "minio" # or 'file', or 's3'
-  bucket: "my-nexus-artifacts"
-  endpoint: "https://minio.internal.local"
-  access_key: "admin"
-  secret_key: "Password123"
+nexus_blobstores:
+  - name: default
+    type: file
+    soft_quota: ""
+    file:
+      path: /data/nexus
 
-# Dictionary of blobstores to provision
-blobstores:
-  docker:
-    enabled: true
-  maven:
-    enabled: true
-  npm:
-    enabled: false # Will be skipped safely
+  - name: s3-storage
+    type: s3
+    soft_quota: 1TB
+    s3:
+      region: us-east-1
+      bucket: my-bucket
+      access_key_id: "{{ vault_s3_key }}"
+      secret_access_key: "{{ vault_s3_secret }}"
+      endpoint: ""
+      path_style_access: false
 ```
+
+### Optional
+
+| Variable | Description | Default |
+|---|---|---|
+| `nexus_blobstores_delete_unmanaged` | Delete unmanaged blobstores | `false` |
+| `nexus_blobstore_valid_types` | Valid blobstore types | `[file, s3]` |
+| `nexus_blobstores_run_once` | Run once in multi-host | `false` |
+| `nexus_blobstores_delegate_to` | Delegate to host | `""` |
+| `nexus_api_retries` | API retry count | `3` |
+| `nexus_api_retry_delay` | Retry delay (seconds) | `5` |
+
+## Dependencies
+
+None
+
+## Example Playbook
+
+```yaml
+- hosts: nexus
+  roles:
+    - role: nexus_blobstores
+      vars:
+        nexus_admin_password: "{{ vault_nexus_admin_password }}"
+        nexus_blobstores:
+          - name: default
+            type: file
+            file:
+              path: /data/nexus
+          - name: docker-blobs
+            type: s3
+            s3:
+              region: us-east-1
+              bucket: nexus-docker
+              access_key_id: "{{ vault_s3_key }}"
+              secret_access_key: "{{ vault_s3_secret }}"
+```
+
+## Tags
+
+| Tag | Description |
+|---|---|
+| `nexus` | All Nexus tasks |
+| `blobstores` | All blobstore tasks |
+| `validate` | Validation tasks |
+| `query` | Query existing blobstores |
+| `create` | Create blobstores |
+| `verify` | Verify blobstore creation |
+| `summary` | Summary output |
+
+## License
+
+Apache-2.0
+
+## Author
+
+nexus-as-code

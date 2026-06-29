@@ -1,0 +1,61 @@
+---
+- name: Java | Display role info
+  ansible.builtin.debug:
+    msg: "Installing OpenJDK {{ nexus_java_version }}"
+  tags: [java]
+
+- name: Java | Install OpenJDK (Debian)
+  ansible.builtin.apt:
+    name: "openjdk-{{ nexus_java_version }}-jdk"
+    state: "{{ nexus_java_package_state }}"
+  when: ansible_os_family == "Debian"
+  tags: [java, install]
+
+- name: Java | Install OpenJDK (RedHat)
+  ansible.builtin.yum:
+    name:
+      - "java-{{ nexus_java_version }}-openjdk"
+      - "java-{{ nexus_java_version }}-openjdk-devel"
+    state: "{{ nexus_java_package_state }}"
+  when: ansible_os_family == "RedHat"
+  tags: [java, install]
+
+- name: Java | Get JAVA_HOME
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      dirname $(dirname $(readlink -f $(which java)))
+    executable: /bin/bash
+  register: java_home_result
+  changed_when: false
+  tags: [java, configure]
+
+- name: Java | Set java_home fact
+  ansible.builtin.set_fact:
+    java_home: "{{ java_home_result.stdout }}"
+  when: java_home_result.stdout | default('') | length > 0
+  tags: [java, configure]
+
+- name: Java | Set JAVA_HOME in profile
+  ansible.builtin.lineinfile:
+    path: /etc/profile.d/java.sh
+    line: "export JAVA_HOME={{ java_home }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: java_home is defined
+  tags: [java, configure]
+
+- name: Java | Verify Java installation
+  ansible.builtin.command:
+    cmd: java -version
+  register: java_version_check
+  changed_when: false
+  failed_when: false
+  tags: [java, verify]
+
+- name: Java | Display Java version
+  ansible.builtin.debug:
+    var: java_version_check.stderr_lines
+  tags: [java, verify]

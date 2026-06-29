@@ -1,0 +1,79 @@
+---
+###############################################################################
+# nexus_proxy — tasks/main.yml
+###############################################################################
+
+- name: Proxy | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring outbound proxy"
+  when: nexus_proxy_enabled
+  tags: [nexus, proxy]
+
+- name: Proxy | Assert proxy host is set
+  ansible.builtin.assert:
+    that:
+      - nexus_http_proxy_host | default('') | length > 0 or nexus_https_proxy_host | default('') | length > 0
+    fail_msg: "[PROXY] ERROR: nexus_proxy_enabled is true but no proxy host configured."
+  when: nexus_proxy_enabled
+  tags: [nexus, proxy, validate]
+
+- name: Proxy | Configure outbound proxy
+  ansible.builtin.uri:
+    url: "{{ nexus_proxy_url }}"
+    method: PUT
+    body_format: json
+    body:
+      httpProxyHost: "{{ nexus_http_proxy_host }}"
+      httpProxyPort: "{{ nexus_http_proxy_port | int }}"
+      httpProxyUsername: "{{ nexus_http_proxy_username }}"
+      httpProxyPassword: "{{ nexus_http_proxy_password }}"
+      httpsProxyHost: "{{ nexus_https_proxy_host }}"
+      httpsProxyPort: "{{ nexus_https_proxy_port | int }}"
+      httpsProxyUsername: "{{ nexus_https_proxy_username }}"
+      httpsProxyPassword: "{{ nexus_https_proxy_password }}"
+      nonProxyHosts: "{{ nexus_no_proxy_hosts }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  register: _proxy_config
+  until: _proxy_config.status in [200, 204]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_proxy_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_proxy_run_once }}"
+  diff: "{{ nexus_proxy_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  when: nexus_proxy_enabled
+  tags: [nexus, proxy, config]
+
+- name: Proxy | Write environment variables
+  ansible.builtin.lineinfile:
+    path: /etc/default/nexus
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { regexp: '^#?HTTP_PROXY=', line: 'HTTP_PROXY={{ nexus_http_proxy_host }}' }
+    - { regexp: '^#?HTTPS_PROXY=', line: 'HTTPS_PROXY={{ nexus_https_proxy_host }}' }
+    - { regexp: '^#?NO_PROXY=', line: 'NO_PROXY={{ nexus_no_proxy_hosts }}' }
+  when:
+    - nexus_proxy_enabled
+    - nexus_http_proxy_host != ""
+  notify: Restart nexus
+  tags: [nexus, proxy, env]
+
+- name: Proxy | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[PROXY] Configuration Complete"
+      - "  Enabled: {{ nexus_proxy_enabled }}"
+      - "  HTTP: {{ nexus_http_proxy_host }}:{{ nexus_http_proxy_port }}"
+      - "  HTTPS: {{ nexus_https_proxy_host }}:{{ nexus_https_proxy_port }}"
+  when: nexus_proxy_enabled
+  tags: [nexus, proxy, summary]

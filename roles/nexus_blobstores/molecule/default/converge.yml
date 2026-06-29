@@ -1,0 +1,20 @@
+---
+- name: Converge - Test nexus_blobstores role
+  hosts: all
+  become: true
+  tasks:
+    - name: Include nexus_blobstores role
+      ansible.builtin.include_role:
+        name: nexus_blobstores
+      vars:
+        nexus_admin_password: admin123
+        nexus_blobstores:
+          - name: default
+            type: file
+            file:
+              path: /data/nexus
+        nexus_blobstores_delete_unmanaged: false
+        nexus_api_retries: 3
+        nexus_api_retry_delay: 5
+        nexus_blobstores_run_once: false
+        nexus_no_log: true

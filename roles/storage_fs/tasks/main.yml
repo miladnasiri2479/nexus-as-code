@@ -1,0 +1,24 @@
+---
+- name: Storage FS | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring local filesystem storage"
+  when: nexus_storage.type == "file"
+  tags: [storage, fs]
+
+- name: Storage FS | Create storage directories
+  ansible.builtin.file:
+    path: "{{ nexus_storage.file.path }}"
+    state: directory
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  when: nexus_storage.type == "file"
+  tags: [storage, fs]
+
+- name: Storage FS | Set permissions on data directory
+  ansible.builtin.file:
+    path: "{{ nexus_data_dir }}"
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  tags: [storage, fs]

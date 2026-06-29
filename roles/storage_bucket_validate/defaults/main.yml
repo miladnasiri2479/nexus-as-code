@@ -1,0 +1,15 @@
+---
+nexus_buckets: []
+nexus_bucket_validate_existence: true
+nexus_bucket_validate_connectivity: true
+nexus_bucket_validate_permissions: true
+nexus_bucket_validate_versioning: true
+nexus_bucket_validate_fail_on_error: true
+nexus_bucket_validate_test_prefix: ".nexus-validation/"
+nexus_storage_type: file
+nexus_minio_endpoint: "http://localhost:{{ nexus_minio_port | default(9000) }}"
+nexus_minio_access_key: ""
+nexus_minio_secret_key: ""
+nexus_minio_alias: nexus
+nexus_storage_minio:
+  enabled: false

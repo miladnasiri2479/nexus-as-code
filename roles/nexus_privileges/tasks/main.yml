@@ -1,0 +1,62 @@
+---
+- name: Privileges | Display role info
+  ansible.builtin.debug:
+    msg: "Validating privileges for {{ nexus_roles | length }} role(s)"
+  tags: [nexus, privileges]
+
+- name: Privileges | Get available privileges
+  ansible.builtin.uri:
+    url: "{{ nexus_privileges_url }}"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _privilege_list
+  until: _privilege_list.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_privileges_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_privileges_run_once }}"
+  changed_when: false
+  tags: [nexus, privileges, query]
+
+- name: Privileges | Set available privileges fact
+  ansible.builtin.set_fact:
+    _available_privileges: "{{ _privilege_list.json | default([]) | map(attribute='name') | list }}"
+  tags: [nexus, privileges, query]
+
+- name: Privileges | Collect all role privileges
+  ansible.builtin.set_fact:
+    _all_role_privileges: "{{ nexus_roles | default([]) | map(attribute='privileges', default=[]) | flatten | list }}"
+  tags: [nexus, privileges, validate]
+
+- name: Privileges | Check privileges exist in Nexus
+  ansible.builtin.set_fact:
+    _unknown_privileges: "{{ _all_role_privileges | default([]) | select('not in', _available_privileges) | unique | list }}"
+  when: nexus_privileges_validate_format
+  tags: [nexus, privileges, validate]
+
+- name: Privileges | Report unknown privileges
+  ansible.builtin.debug:
+    msg: "[PRIVILEGES] WARNING: Unknown privileges: {{ _unknown_privileges | join(', ') }}"
+  when:
+    - nexus_privileges_validate_format
+    - _unknown_privileges is defined
+    - _unknown_privileges | length > 0
+  tags: [nexus, privileges, validate]
+
+- name: Privileges | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[PRIVILEGES] Validation Complete"
+      - "  Available in Nexus: {{ _available_privileges | length }}"
+      - "  Referenced in roles: {{ _all_role_privileges | length }}"
+      - "  Unknown: {{ _unknown_privileges | length | default(0) }}"
+  tags: [nexus, privileges, summary]

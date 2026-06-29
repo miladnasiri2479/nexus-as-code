@@ -1,0 +1,18 @@
+---
+###############################################################################
+# Nexus as Code - Backup Playbook
+# ============================================================================
+# Backup Nexus data, configuration, and blob stores.
+#
+# Usage:
+#   ansible-playbook -i inventories/production/inventory.yml playbooks/nexus_backup.yml
+###############################################################################
+
+- name: Backup Nexus Repository Manager
+  hosts: nexus
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: nexus_backup
+      tags: [nexus, backup]

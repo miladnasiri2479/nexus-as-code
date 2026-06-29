@@ -1,0 +1,17 @@
+---
+- name: Converge - Test nexus_repos role
+  hosts: all
+  become: true
+  tasks:
+    - name: Include nexus_repos role
+      ansible.builtin.include_role:
+        name: nexus_repos
+      vars:
+        nexus_admin_password: admin123
+        nexus_repos: []
+        nexus_repos_delete_unmanaged: false
+        nexus_repos_expected: []
+        nexus_api_retries: 3
+        nexus_api_retry_delay: 5
+        nexus_repos_run_once: false
+        nexus_no_log: true

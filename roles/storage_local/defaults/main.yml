@@ -1,0 +1,13 @@
+---
+nexus_storage_local_path: "{{ nexus_storage_local.path | default('/data/nexus') }}"
+nexus_storage_local_owner: "{{ nexus_storage_local.owner | default('nexus') }}"
+nexus_storage_local_group: "{{ nexus_storage_local.group | default('nexus') }}"
+nexus_storage_local_mode: "{{ nexus_storage_local.mode | default('0755') }}"
+nexus_storage_local_create_subdirs: "{{ nexus_storage_local.create_subdirs | default(true) }}"
+nexus_storage_local_min_free_gb: "{{ nexus_storage_local.min_free_space_gb | default(10) }}"
+nexus_storage_local_mounts: "{{ nexus_storage_local.mounts | default([]) }}"
+nexus_storage_local_lvm: "{{ nexus_storage_local.lvm | default({}) }}"
+nexus_blobstores: []
+nexus_data_dir: /var/nexus/data
+nexus_runas_user: nexus
+nexus_runas_group: nexus

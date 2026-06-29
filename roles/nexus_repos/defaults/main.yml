@@ -1,0 +1,150 @@
+---
+###############################################################################
+# nexus_repos — defaults
+#
+# Repository configuration. All values from group_vars.
+# No hardcoded values in tasks — everything reads from this file.
+###############################################################################
+
+# ──────────────────────────────────────────────────────────────────────────────
+# REPOSITORIES
+# ──────────────────────────────────────────────────────────────────────────────
+
+# List of repositories to create.
+# Type: list[dict]
+nexus_repos: []
+
+# Delete repos not defined in nexus_repos.
+# WARNING: destructive.
+# Type: bool
+nexus_repos_delete_unmanaged: false
+
+# Repos to keep even if unmanaged.
+# Type: list[string]
+nexus_repos_expected: []
+
+# Valid repository formats.
+# Type: list[string]
+nexus_repo_valid_formats:
+  - maven2
+  - docker
+  - npm
+  - pypi
+  - helm
+  - raw
+  - go
+  - nuget
+  - yum
+  - apt
+  - conan
+  - cocoapods
+  - r
+  - rubygems
+  - composer
+  - gitlfs
+
+# Valid repository types.
+# Type: list[string]
+nexus_repo_valid_types:
+  - hosted
+  - proxy
+  - virtual
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BLOBSTORE MAPPING
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Explicit repo → blobstore mapping.
+# Type: dict
+nexus_repo_blobstore_map: {}
+
+# Default blob store per format.
+# Type: dict
+nexus_format_blobstore_defaults:
+  maven2: default
+  docker: default
+  npm: default
+  pypi: default
+  helm: default
+  raw: default
+  go: default
+  nuget: default
+  yum: default
+  apt: default
+  conan: default
+  cocoapods: default
+  r: default
+  rubygems: default
+  composer: default
+  gitlfs: default
+
+# ──────────────────────────────────────────────────────────────────────────────
+# API CONNECTION
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Admin credentials.
+# Type: string
+nexus_admin_user: admin
+nexus_admin_password: ""
+
+# Validate SSL certificates.
+# Type: bool
+nexus_validate_certs: true
+
+# Nexus API connection.
+# Type: string/int
+nexus_port: 8081
+nexus_listen_address: "0.0.0.0"
+nexus_context_path: "/"
+nexus_api_scheme: http
+nexus_api_version: v1
+nexus_api_timeout: 30
+
+# API retry settings.
+# Type: int
+nexus_api_retries: 3
+nexus_api_retry_delay: 5
+
+# Computed API base URL.
+# Type: string (derived)
+nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# COMPUTED URLs
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Repository API URLs.
+# Type: string (derived)
+nexus_repos_list_url: "{{ nexus_api_base_url }}/repositories"
+nexus_repos_create_url: "{{ nexus_api_base_url }}/repositories"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OPERATIONAL SETTINGS
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Run once in multi-host deployments.
+# Type: bool
+nexus_repos_run_once: false
+
+# Delegate to specific host.
+# Type: string
+nexus_repos_delegate_to: ""
+
+# Async support.
+# Type: int
+nexus_repos_async: 0
+nexus_repos_poll: 0
+
+# Diff mode.
+# Type: bool
+nexus_repos_diff: true
+
+# Log sensitive variables.
+# Type: bool
+nexus_no_log: true
+
+# Proxy environment.
+# Type: string
+nexus_http_proxy: ""
+nexus_https_proxy: ""
+nexus_no_proxy: ""

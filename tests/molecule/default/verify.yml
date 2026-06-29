@@ -1,0 +1,26 @@
+---
+- name: Verify Nexus deployment
+  hosts: all
+  become: true
+  tasks:
+    - name: Check Nexus service is running
+      ansible.builtin.systemd:
+        name: nexus
+      register: nexus_service
+
+    - name: Assert Nexus is active
+      ansible.builtin.assert:
+        that:
+          - nexus_service.status.ActiveState == "active"
+
+    - name: Check Nexus API health
+      ansible.builtin.uri:
+        url: "http://localhost:8081/service/rest/v1/status"
+        method: GET
+        status_code: 200
+      register: nexus_health
+
+    - name: Assert API is healthy
+      ansible.builtin.assert:
+        that:
+          - nexus_health.status == 200

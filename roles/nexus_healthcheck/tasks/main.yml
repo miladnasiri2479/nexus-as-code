@@ -1,0 +1,139 @@
+---
+- name: Healthcheck | Display role info
+  ansible.builtin.debug:
+    msg: "Running Nexus health checks"
+  when: nexus_healthcheck_enabled
+  tags: [nexus, healthcheck]
+
+- name: Healthcheck | Initialize results
+  ansible.builtin.set_fact:
+    _healthcheck_results: []
+    _healthcheck_errors: []
+  when: nexus_healthcheck_enabled
+  tags: [nexus, healthcheck]
+
+- name: Healthcheck | Check port connectivity
+  block:
+    - name: Healthcheck | Wait for port
+      ansible.builtin.wait_for:
+        host: "{{ nexus_healthcheck_host }}"
+        port: "{{ nexus_healthcheck_port }}"
+        timeout: 5
+      register: _port_check
+
+    - name: Healthcheck | Report port OK
+      ansible.builtin.set_fact:
+        _healthcheck_results: "{{ _healthcheck_results + ['PORT: OK'] }}"
+  rescue:
+    - name: Healthcheck | Report port failure
+      ansible.builtin.set_fact:
+        _healthcheck_results: "{{ _healthcheck_results + ['PORT: FAILED'] }}"
+        _healthcheck_errors: "{{ _healthcheck_errors + ['Port ' + nexus_healthcheck_port | string + ' is not reachable'] }}"
+  when:
+    - nexus_healthcheck_enabled
+    - "'port' in nexus_healthcheck_checks"
+  tags: [nexus, healthcheck, port]
+
+- name: Healthcheck | Check systemd service
+  block:
+    - name: Healthcheck | Get service status
+      ansible.builtin.systemd:
+        name: "{{ nexus_healthcheck_service_name }}"
+      register: _service_check
+
+    - name: Healthcheck | Report service status
+      ansible.builtin.set_fact:
+        _healthcheck_results: "{{ _healthcheck_results + ['SERVICE: ' + (_service_check.status.ActiveState | default('unknown'))] }}"
+  rescue:
+    - name: Healthcheck | Report service failure
+      ansible.builtin.set_fact:
+        _healthcheck_results: "{{ _healthcheck_results + ['SERVICE: FAILED'] }}"
+        _healthcheck_errors: "{{ _healthcheck_errors + ['Service ' + nexus_healthcheck_service_name + ' is not active'] }}"
+  when:
+    - nexus_healthcheck_enabled
+    - "'service' in nexus_healthcheck_checks"
+  tags: [nexus, healthcheck, service]
+
+- name: Healthcheck | Check API health
+  block:
+    - name: Healthcheck | Query API
+      ansible.builtin.uri:
+        url: "http://{{ nexus_healthcheck_host }}:{{ nexus_healthcheck_port }}{{ nexus_healthcheck_api_path }}"
+        method: GET
+        timeout: "{{ nexus_healthcheck_api_timeout }}"
+        status_code: "{{ nexus_healthcheck_api_expected_status }}"
+      register: _api_check
+      until: _api_check.status == nexus_healthcheck_api_expected_status
+      retries: "{{ nexus_healthcheck_api_retries }}"
+      delay: "{{ nexus_healthcheck_api_delay }}"
+
+    - name: Healthcheck | Report API OK
+      ansible.builtin.set_fact:
+        _healthcheck_results: "{{ _healthcheck_results + ['API: OK (HTTP ' + (_api_check.status | string) + ')'] }}"
+  rescue:
+    - name: Healthcheck | Report API failure
+      ansible.builtin.set_fact:
+        _healthcheck_results: "{{ _healthcheck_results + ['API: FAILED'] }}"
+        _healthcheck_errors: "{{ _healthcheck_errors + ['API health check failed'] }}"
+  when:
+    - nexus_healthcheck_enabled
+    - "'api' in nexus_healthcheck_checks"
+  tags: [nexus, healthcheck, api]
+
+- name: Healthcheck | Get disk usage
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      df -BG "{{ nexus_data_dir | default('/var/nexus/data') }}" | awk 'NR==2{print $5}' | tr -d '%'
+    executable: /bin/bash
+  register: _disk_usage
+  changed_when: false
+  when:
+    - nexus_healthcheck_enabled
+    - "'disk' in nexus_healthcheck_checks"
+  tags: [nexus, healthcheck, disk]
+
+- name: Healthcheck | Report disk status
+  ansible.builtin.set_fact:
+    _healthcheck_results: "{{ _healthcheck_results + ['DISK: OK (' + (_disk_usage.stdout | default('0')) + '% used)'] }}"
+  when:
+    - nexus_healthcheck_enabled
+    - "'disk' in nexus_healthcheck_checks"
+    - _disk_usage.stdout | default('100') | int < nexus_healthcheck_disk_warn_percent
+  tags: [nexus, healthcheck, disk]
+
+- name: Healthcheck | Report disk warning
+  ansible.builtin.set_fact:
+    _healthcheck_results: "{{ _healthcheck_results + ['DISK: WARNING (' + (_disk_usage.stdout | default('0')) + '% used)'] }}"
+    _healthcheck_errors: "{{ _healthcheck_errors + ['Disk usage is ' + (_disk_usage.stdout | default('0')) + '%'] }}"
+  when:
+    - nexus_healthcheck_enabled
+    - "'disk' in nexus_healthcheck_checks"
+    - _disk_usage.stdout | default('100') | int >= nexus_healthcheck_disk_warn_percent
+  tags: [nexus, healthcheck, disk]
+
+- name: Healthcheck | Display results
+  ansible.builtin.debug:
+    msg:
+      - "[HEALTHCHECK] Results:"
+      - "{{ _healthcheck_results | default([]) | list }}"
+      - "Errors: {{ _healthcheck_errors | default([]) | length }}"
+  when: nexus_healthcheck_enabled
+  tags: [nexus, healthcheck, report]
+
+- name: Healthcheck | Fail on errors
+  ansible.builtin.fail:
+    msg: "[HEALTHCHECK] FAILED: {{ _healthcheck_errors | join(', ') }}"
+  when:
+    - nexus_healthcheck_enabled
+    - nexus_healthcheck_fail_on_error
+    - (_healthcheck_errors | default([])) | length > 0
+  tags: [nexus, healthcheck, report]
+
+- name: Healthcheck | Display success
+  ansible.builtin.debug:
+    msg: "[HEALTHCHECK] PASSED"
+  when:
+    - nexus_healthcheck_enabled
+    - (_healthcheck_errors | default([])) | length == 0
+  tags: [nexus, healthcheck, report]

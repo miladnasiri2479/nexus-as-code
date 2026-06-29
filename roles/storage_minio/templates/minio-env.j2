@@ -1,0 +1,11 @@
+# MinIO Environment Configuration
+# Managed by Ansible — DO NOT EDIT MANUALLY
+# Role: storage_minio
+
+MINIO_VOLUMES="{{ nexus_minio_volumes | default(nexus_minio_data_dir) }}"
+MINIO_OPTS="--address {{ nexus_minio_listen_address }} --console-address {{ nexus_minio_console_listen_address }}"
+MINIO_ROOT_USER="{{ nexus_minio_access_key }}"
+MINIO_ROOT_PASSWORD="{{ nexus_minio_secret_key }}"
+{% if nexus_minio_tls_enabled | default(false) %}
+MINIO_CERT_DIR="{{ nexus_minio_cert_dir }}"
+{% endif %}

@@ -1,0 +1,111 @@
+---
+- name: Common | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring common prerequisites"
+  tags: [common]
+
+- name: Common | Update package cache (Debian)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  tags: [common, packages]
+
+- name: Common | Install packages (Debian)
+  ansible.builtin.apt:
+    name: "{{ nexus_common_packages }}"
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: [common, packages]
+
+- name: Common | Install packages (RedHat)
+  ansible.builtin.yum:
+    name: "{{ nexus_common_packages }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+  tags: [common, packages]
+
+- name: Common | Create nexus group
+  ansible.builtin.group:
+    name: "{{ nexus_runas_group }}"
+    state: present
+  when: nexus_create_user
+  tags: [common, user]
+
+- name: Common | Create nexus user
+  ansible.builtin.user:
+    name: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    shell: /sbin/nologin
+    home: "{{ nexus_install_dir }}"
+    system: true
+    create_home: false
+    state: present
+  when: nexus_create_user
+  tags: [common, user]
+
+- name: Common | Create directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ nexus_install_dir }}", owner: "{{ nexus_runas_user }}", group: "{{ nexus_runas_group }}", mode: "0755"}
+    - {path: "{{ nexus_data_dir }}", owner: "{{ nexus_runas_user }}", group: "{{ nexus_runas_group }}", mode: "0755"}
+    - {path: "{{ nexus_temp_dir }}", owner: "{{ nexus_runas_user }}", group: "{{ nexus_runas_group }}", mode: "0755"}
+    - {path: "{{ nexus_work_dir }}", owner: "{{ nexus_runas_user }}", group: "{{ nexus_runas_group }}", mode: "0755"}
+    - {path: "/etc/nexus", owner: "root", group: "root", mode: "0755"}
+    - {path: "/var/log/nexus", owner: "{{ nexus_runas_user }}", group: "{{ nexus_runas_group }}", mode: "0755"}
+  loop_control:
+    label: "{{ item.path }}"
+  tags: [common, dirs]
+
+- name: Common | Set system limits
+  ansible.builtin.lineinfile:
+    path: /etc/security/limits.d/nexus.conf
+    line: "{{ item }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - "{{ nexus_runas_user }} soft nofile {{ nexus_limits_nofile }}"
+    - "{{ nexus_runas_user }} hard nofile {{ nexus_limits_nofile }}"
+    - "{{ nexus_runas_user }} soft nproc {{ nexus_limits_nproc }}"
+    - "{{ nexus_runas_user }} hard nproc {{ nexus_limits_nproc }}"
+  when: nexus_create_user
+  tags: [common, limits]
+
+- name: Common | Configure sysctl
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/99-nexus.conf
+    reload: true
+  loop:
+    - {key: "vm.max_map_count", value: "262144"}
+    - {key: "net.core.somaxconn", value: "65535"}
+    - {key: "net.ipv4.tcp_max_syn_backlog", value: "65535"}
+  tags: [common, sysctl]
+
+- name: Common | Set timezone
+  community.general.timezone:
+    name: "{{ nexus_timezone }}"
+  when: nexus_timezone is defined
+  tags: [common, timezone]
+
+- name: Common | Enable chrony
+  block:
+    - name: Common | Start chrony service
+      ansible.builtin.systemd:
+        name: chronyd
+        state: started
+        enabled: true
+  rescue:
+    - name: Common | Chrony not available (skip)
+      ansible.builtin.debug:
+        msg: "Chrony not available, skipping NTP configuration"
+  when: nexus_ntp_enabled
+  tags: [common, ntp]

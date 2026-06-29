@@ -1,27 +1,230 @@
 ---
-# roles/nexus_blobstores/tasks/main.yml
+###############################################################################
+# nexus_blobstores — tasks/main.yml
+#
+# Create and manage blob stores via Nexus REST API.
+# Supports file and S3 types. All values from variables — no hardcoded values.
+# Supports: check_mode, diff, async, delegate_to, run_once, no_log
+###############################################################################
 
-- name: Get list of existing blobstores
+- name: Blobstores | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring {{ nexus_blobstores | length }} blob store(s)"
+  tags: [nexus, blobstores]
+
+###############################################################################
+# VALIDATE
+###############################################################################
+
+- name: Blobstores | Assert admin password is set
+  ansible.builtin.assert:
+    that:
+      - nexus_admin_password | default('') | length > 0
+    fail_msg: >-
+      [BLOBSTORES] ERROR: Missing required variable 'nexus_admin_password'.
+  tags: [nexus, blobstores, validate]
+
+- name: Blobstores | Validate blobstore types
+  ansible.builtin.assert:
+    that:
+      - item.type | default('file') in nexus_blobstore_valid_types
+    fail_msg: >-
+      [BLOBSTORES] ERROR: Invalid type '{{ item.type | default("file") }}' for blobstore '{{ item.name }}'.
+      Valid types: {{ nexus_blobstore_valid_types | join(', ') }}
+  loop: "{{ nexus_blobstores }}"
+  loop_control:
+    label: "Blobstore: {{ item.name }}"
+    pause: 0
+  when: nexus_blobstores | length > 0
+  tags: [nexus, blobstores, validate]
+
+- name: Blobstores | Validate S3 settings
+  ansible.builtin.assert:
+    that:
+      - item.s3 | default({}) | length > 0
+      - item.s3.bucket | default('') | length > 0
+    fail_msg: >-
+      [BLOBSTORES] ERROR: S3 blobstore '{{ item.name }}' missing required s3.bucket.
+  loop: "{{ nexus_blobstores }}"
+  loop_control:
+    label: "Blobstore: {{ item.name }}"
+    pause: 0
+  when:
+    - nexus_blobstores | length > 0
+    - item.type | default('file') == 's3'
+  tags: [nexus, blobstores, validate]
+
+###############################################################################
+# GET EXISTING
+###############################################################################
+
+- name: Blobstores | Get existing blob stores
   ansible.builtin.uri:
-    url: "http://localhost:{{ nexus.http_port | default(8081) }}/service/rest/v1/blobstores"
+    url: "{{ nexus_blobstores_list_url }}"
     method: GET
-    user: "{{ nexus.admin_user | default('admin') }}"
-    password: "{{ nexus.admin_password }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
     force_basic_auth: true
     return_content: true
-    status_code: 200
-  register: existing_blobstores_api
-  no_log: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _blobstore_list
+  until: _blobstore_list.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_blobstores_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_blobstores_run_once }}"
   changed_when: false
+  tags: [nexus, blobstores, query]
 
-- name: Set fact for existing blobstore names
+- name: Blobstores | Set existing blobstores fact
   ansible.builtin.set_fact:
-    existing_blobstore_names: "{{ existing_blobstores_api.json | map(attribute='name') | list }}"
+    _existing_blobstores: "{{ _blobstore_list.json | default([]) | map(attribute='name') | list }}"
+  tags: [nexus, blobstores, query]
 
-- name: Manage individual blobstores dynamically based on storage.type
-  ansible.builtin.include_tasks: manage_blobstore.yml
-  loop: "{{ blobstores | dict2items }}"
+- name: Blobstores | Display existing blobstores
+  ansible.builtin.debug:
+    msg: "Existing: {{ _existing_blobstores }}"
+  tags: [nexus, blobstores, query]
+
+###############################################################################
+# CREATE FILE BLOBSTORES
+###############################################################################
+
+- name: Blobstores | Create file blob stores
+  ansible.builtin.uri:
+    url: "{{ nexus_blobstores_file_url }}"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      path: "{{ item.file.path | default(nexus_storage_local_path ~ '/' ~ item.name) }}"
+      softQuota:
+        type: spaceUsed
+        limit: "{{ item.soft_quota | default('') }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _blobstore_create_file
+  until: _blobstore_create_file.status in [200, 201]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_blobstores_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_blobstores_run_once }}"
+  diff: "{{ nexus_blobstores_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  loop: "{{ nexus_blobstores }}"
   loop_control:
-    loop_var: bs_item
-    label: "{{ bs_item.key }}"
-  when: bs_item.value.enabled | default(false) | bool
+    label: "File: {{ item.name }}"
+    pause: 0
+  when:
+    - item.type | default('file') == 'file'
+    - item.name not in _existing_blobstores
+  tags: [nexus, blobstores, create]
+
+###############################################################################
+# CREATE S3 BLOBSTORES
+###############################################################################
+
+- name: Blobstores | Create S3 blob stores
+  ansible.builtin.uri:
+    url: "{{ nexus_blobstores_s3_url }}"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      region: "{{ item.s3.region | default(nexus_storage_s3_region) }}"
+      bucket: "{{ item.s3.bucket }}"
+      accessKeyId: "{{ item.s3.access_key_id | default('') }}"
+      secretAccessKey: "{{ item.s3.secret_access_key | default('') }}"
+      endpoint: "{{ item.s3.endpoint | default('') }}"
+      baseDirectory: "{{ item.s3.base_directory | default('') }}"
+      chunkSize: "{{ item.s3.chunk_size | default('') }}"
+      maxBlobSize: "{{ item.s3.max_blob_size | default('') }}"
+      maxConnections: "{{ item.s3.max_connections | default('') }}"
+      maxErrorRetry: "{{ item.s3.max_error_retry | default(nexus_storage_s3_max_error_retry) }}"
+      pathStyleAccess: "{{ item.s3.path_style_access | default(nexus_storage_s3_path_style_access) }}"
+      encryption: "{{ item.s3.encryption | default('') }}"
+      sseKmsKeyId: "{{ item.s3.sse_kms_key_id | default('') }}"
+      softQuota:
+        type: spaceUsed
+        limit: "{{ item.soft_quota | default('') }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _blobstore_create_s3
+  until: _blobstore_create_s3.status in [200, 201]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_blobstores_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_blobstores_run_once }}"
+  diff: "{{ nexus_blobstores_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  loop: "{{ nexus_blobstores }}"
+  loop_control:
+    label: "S3: {{ item.name }}"
+    pause: 0
+  when:
+    - item.type | default('file') == 's3'
+    - item.name not in _existing_blobstores
+  tags: [nexus, blobstores, create]
+
+###############################################################################
+# VERIFY
+###############################################################################
+
+- name: Blobstores | Verify blobstore creation
+  ansible.builtin.uri:
+    url: "{{ nexus_api_base_url }}/blobstores/{{ item.name }}"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _blobstore_verify
+  until: _blobstore_verify.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_blobstores_delegate_to | default(omit) }}"
+  loop: "{{ nexus_blobstores }}"
+  loop_control:
+    label: "Verify: {{ item.name }}"
+    pause: 0
+  tags: [nexus, blobstores, verify]
+
+###############################################################################
+# SUMMARY
+###############################################################################
+
+- name: Blobstores | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[BLOBSTORES] Configuration Complete"
+      - "  Defined: {{ nexus_blobstores | length }}"
+      - "  Already existed: {{ _existing_blobstores | intersect(nexus_blobstores | map(attribute='name') | list) | length }}"
+      - "  Created: {{ nexus_blobstores | length - _existing_blobstores | intersect(nexus_blobstores | map(attribute='name') | list) | length }}"
+  tags: [nexus, blobstores, summary]

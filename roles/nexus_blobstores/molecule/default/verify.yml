@@ -1,0 +1,39 @@
+---
+- name: Verify nexus_blobstores role
+  hosts: all
+  become: true
+  tasks:
+    - name: Verify defaults are set
+      ansible.builtin.assert:
+        that:
+          - nexus_admin_user == "admin"
+          - nexus_port == 8081
+          - nexus_blobstores_delete_unmanaged == false
+          - nexus_api_retries == 3
+          - nexus_api_retry_delay == 5
+          - nexus_blobstore_valid_types | length == 2
+        success_msg: "All defaults verified"
+        fail_msg: "Default verification failed"
+      tags: [verify]
+
+    - name: Verify computed URLs
+      ansible.builtin.assert:
+        that:
+          - "'http://' in nexus_api_base_url"
+          - "'8081' in nexus_api_base_url"
+          - "'service/rest/v1' in nexus_api_base_url"
+          - "'blobstores' in nexus_blobstores_list_url"
+          - "'blobstores/file' in nexus_blobstores_file_url"
+          - "'blobstores/s3' in nexus_blobstores_s3_url"
+        success_msg: "All computed URLs verified"
+        fail_msg: "URL verification failed"
+      tags: [verify]
+
+    - name: Verify valid types list
+      ansible.builtin.assert:
+        that:
+          - "'file' in nexus_blobstore_valid_types"
+          - "'s3' in nexus_blobstore_valid_types"
+        success_msg: "Valid types verified"
+        fail_msg: "Types verification failed"
+      tags: [verify]

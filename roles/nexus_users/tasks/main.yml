@@ -1,0 +1,134 @@
+---
+- name: Users | Display role info
+  ansible.builtin.debug:
+    msg: "Configuring {{ nexus_users | length }} user(s)"
+  tags: [nexus, users]
+
+- name: Users | Assert admin password is set
+  ansible.builtin.assert:
+    that:
+      - nexus_admin_password | default('') | length > 0
+    fail_msg: "[USERS] ERROR: Missing required variable 'nexus_admin_password'."
+  tags: [nexus, users, validate]
+
+- name: Users | Validate user passwords
+  ansible.builtin.assert:
+    that:
+      - item.password | default('') | length > 0
+    fail_msg: "[USERS] ERROR: User '{{ item.userId | default(item.name) }}' missing password."
+  loop: "{{ nexus_users }}"
+  loop_control:
+    label: "User: {{ item.userId | default(item.name) }}"
+    pause: 0
+  when: nexus_users | length > 0
+  tags: [nexus, users, validate]
+
+- name: Users | Get existing users
+  ansible.builtin.uri:
+    url: "{{ nexus_users_url }}"
+    method: GET
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    return_content: true
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _user_list
+  until: _user_list.status == 200
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_users_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_users_run_once }}"
+  changed_when: false
+  tags: [nexus, users, query]
+
+- name: Users | Set existing users fact
+  ansible.builtin.set_fact:
+    _existing_users: "{{ _user_list.json | default([]) | map(attribute='userId') | list }}"
+  tags: [nexus, users, query]
+
+- name: Users | Create users
+  ansible.builtin.uri:
+    url: "{{ nexus_users_url }}"
+    method: POST
+    body_format: json
+    body:
+      userId: "{{ item.userId | default(item.name) }}"
+      firstName: "{{ item.first_name | default(item.firstName | default('')) }}"
+      lastName: "{{ item.last_name | default(item.lastName | default('')) }}"
+      email: "{{ item.email | default('') }}"
+      password: "{{ item.password }}"
+      status: "{{ item.status | default('active') }}"
+      roles: "{{ item.roles | default([]) }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 201]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _user_create
+  until: _user_create.status in [200, 201]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_users_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_users_run_once }}"
+  diff: "{{ nexus_users_diff }}"
+  no_log: "{{ nexus_no_log }}"
+  loop: "{{ nexus_users }}"
+  loop_control:
+    label: "Create: {{ item.userId | default(item.name) }}"
+    pause: 0
+  when: (item.userId | default(item.name)) not in _existing_users
+  tags: [nexus, users, create]
+
+- name: Users | Update existing users
+  ansible.builtin.uri:
+    url: "{{ nexus_users_url }}/{{ item.userId | default(item.name) }}"
+    method: PUT
+    body_format: json
+    body:
+      userId: "{{ item.userId | default(item.name) }}"
+      firstName: "{{ item.first_name | default(item.firstName | default('')) }}"
+      lastName: "{{ item.last_name | default(item.lastName | default('')) }}"
+      email: "{{ item.email | default('') }}"
+      status: "{{ item.status | default('active') }}"
+      roles: "{{ item.roles | default([]) }}"
+    user: "{{ nexus_admin_user }}"
+    password: "{{ nexus_admin_password }}"
+    force_basic_auth: true
+    status_code: [200, 204]
+    validate_certs: "{{ nexus_validate_certs }}"
+    timeout: "{{ nexus_api_timeout }}"
+  environment:
+    HTTP_PROXY: "{{ nexus_http_proxy | default(omit) }}"
+    HTTPS_PROXY: "{{ nexus_https_proxy | default(omit) }}"
+    NO_PROXY: "{{ nexus_no_proxy | default(omit) }}"
+  register: _user_update
+  until: _user_update.status in [200, 204]
+  retries: "{{ nexus_api_retries }}"
+  delay: "{{ nexus_api_retry_delay }}"
+  delegate_to: "{{ nexus_users_delegate_to | default(omit) }}"
+  run_once: "{{ nexus_users_run_once }}"
+  diff: "{{ nexus_users_diff }}"
+  loop: "{{ nexus_users }}"
+  loop_control:
+    label: "Update: {{ item.userId | default(item.name) }}"
+    pause: 0
+  when: (item.userId | default(item.name)) in _existing_users
+  tags: [nexus, users, update]
+
+- name: Users | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[USERS] Configuration Complete"
+      - "  Defined: {{ nexus_users | length }}"
+      - "  Already existed: {{ _existing_users | intersect(nexus_users | selectattr('userId', 'defined') | map(attribute='userId') | list) | length }}"
+  tags: [nexus, users, summary]
