@@ -19,14 +19,3 @@
     - nexus_service_state == 'started'
     - nexus_install_method == 'binary'
   listen: Restart nexus
-
-- name: Restart nexus docker
-  community.docker.docker_compose_v2:
-    project_src: "{{ nexus_docker_compose_dir }}"
-    project_name: "{{ nexus_docker_compose_project }}"
-    files:
-      - docker-compose.yml
-    state: restarted
-  when:
-    - nexus_install_method in ['docker', 'compose']
-  listen: Restart nexus docker

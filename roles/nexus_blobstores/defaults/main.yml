@@ -97,11 +97,6 @@ nexus_blobstores_run_once: false
 # Type: string
 nexus_blobstores_delegate_to: ""
 
-# Async support.
-# Type: int
-nexus_blobstores_async: 0
-nexus_blobstores_poll: 0
-
 # Diff mode.
 # Type: bool
 nexus_blobstores_diff: true

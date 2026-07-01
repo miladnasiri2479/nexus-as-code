@@ -1479,10 +1479,6 @@ nexus_java_version: "17"
 # Type: string  |  Valid: present, latest
 nexus_java_package_state: present
 
-# Set system hostname from nexus_hostname.
-# Type: bool
-nexus_set_hostname: false
-
 # System timezone.
 # Type: string  |  Example: "UTC", "America/New_York", "Europe/Berlin"
 nexus_timezone: UTC
