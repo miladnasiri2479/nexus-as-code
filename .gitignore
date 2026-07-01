@@ -13,3 +13,6 @@ molecule/**/state/
 .DS_Store
 .vscode/
 .idea/
+milad.out
+testing-strategy.out
+implementation-audit.out
