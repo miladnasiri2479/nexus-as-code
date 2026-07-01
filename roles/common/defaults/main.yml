@@ -20,6 +20,5 @@ nexus_temp_dir: /var/nexus/tmp
 nexus_work_dir: /var/nexus/scratch
 nexus_limits_nofile: 65536
 nexus_limits_nproc: 65536
-nexus_set_hostname: false
 nexus_timezone: UTC
 nexus_ntp_enabled: true

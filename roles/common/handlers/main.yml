@@ -1,5 +1,2 @@
 ---
-- name: Restart chrony
-  ansible.builtin.systemd:
-    name: chronyd
-    state: restarted
+# common has no handlers.

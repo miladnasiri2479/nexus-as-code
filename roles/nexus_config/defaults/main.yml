@@ -33,7 +33,6 @@ nexus_log_level: INFO
 nexus_log_pattern: "%d{ISO8601} [%t] %-5level %logger{36} - %msg%n"
 nexus_log_max_size: "10 MB"
 nexus_log_max_files: 5
-nexus_force_restart: false
 nexus_runas_user: nexus
 nexus_runas_group: nexus
 nexus_current_link: /opt/sonatype/current
