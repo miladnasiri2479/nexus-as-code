@@ -92,12 +92,21 @@
   when: nexus_traefik_enabled | default(false)
   tags: [nexus, proxy, traefik]
 
+- name: Proxy | Count enabled Traefik repos
+  ansible.builtin.set_fact:
+    _traefik_repo_count: >-
+      {{ nexus_repositories
+         | selectattr('enabled', 'defined')
+         | selectattr('enabled', 'equalto', true)
+         | selectattr('traefik_subdomain_prefix', 'defined')
+         | selectattr('traefik_subdomain_prefix', 'ne', '')
+         | list | length }}
+  when: nexus_traefik_enabled | default(false)
+  tags: [nexus, proxy, traefik]
+
 - name: Proxy | Display Traefik summary
   ansible.builtin.debug:
-    msg: >-
-      [TRAEFIK] Generated config for
-      {{ nexus_repositories | selectattr('enabled', 'defined') | selectattr('enabled', 'equalto', true) | selectattr('traefik_subdomain_prefix', 'defined') | selectattr('traefik_subdomain_prefix', 'ne', '') | list | length }}
-      repository(ies)
+    msg: "[TRAEFIK] Generated config for {{ _traefik_repo_count }} repository(ies)"
   when: nexus_traefik_enabled | default(false)
   tags: [nexus, proxy, traefik]
 
