@@ -1,0 +1,68 @@
+---
+###############################################################################
+# traefik_setup — defaults
+###############################################################################
+
+# Enable Traefik installation.
+# Type: bool
+traefik_enabled: false
+
+# Traefik version.
+# Type: string
+traefik_version: "2.11"
+
+# Traefik Docker image.
+# Type: string
+traefik_docker_image: "traefik:v{{ traefik_version }}"
+
+# Traefik container name.
+# Type: string
+traefik_container_name: traefik
+
+# Traefik ports.
+# Type: int
+traefik_http_port: 80
+traefik_https_port: 443
+traefik_dashboard_port: 8080
+
+# Traefik network.
+# Type: string
+traefik_network: nexus
+
+# Traefik volumes.
+# Type: list[string]
+traefik_volumes:
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+  - /etc/traefik:/etc/traefik
+
+# Traefik environment.
+# Type: dict
+traefik_env: {}
+
+# Traefik labels.
+# Type: list[string]
+traefik_labels: []
+
+# Primary domain.
+# Type: string
+main_domain: example.com
+
+# Let's Encrypt configuration.
+# Type: bool
+traefik_letsencrypt_enabled: false
+traefik_letsencrypt_email: ""
+
+# Dashboard configuration.
+# Type: bool
+traefik_dashboard_enabled: false
+traefik_dashboard_auth_user: admin
+traefik_dashboard_auth_password: ""
+
+# Nexus listen address.
+# Type: string
+nexus_listen_address: "0.0.0.0"
+nexus_port: 8081
+
+# Service name.
+# Type: string
+nexus_service_name: traefik

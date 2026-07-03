@@ -103,7 +103,7 @@ systemctl start {{ nexus_service_name }}
 log "Waiting for Nexus API..."
 RETRIES=0
 MAX_RETRIES=30
-until curl -sf "http://localhost:{{ nexus_port | default(8081) }}{{ nexus_context_path | default('/') }}service/rest/v1/status" >/dev/null 2>&1; do
+until curl -sf "http://localhost:{{ nexus_port | default(8081) }}//service/rest/v1/status" >/dev/null 2>&1; do
     RETRIES=$((RETRIES + 1))
     if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
         log "ERROR: Nexus API not responding after ${MAX_RETRIES} attempts"

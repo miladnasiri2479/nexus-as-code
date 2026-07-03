@@ -1,0 +1,59 @@
+# =============================================================================
+# Traefik Dynamic Configuration for Nexus Repositories
+# Managed by Ansible — DO NOT EDIT MANUALLY
+# Role: nexus_proxy
+#
+# This file is generated from nexus_repositories.
+# Each repository with enabled=true and traefik_subdomain_prefix defined
+# will generate a Traefik router and service.
+#
+# Usage:
+#   - Mount this file into Traefik's dynamic config directory
+#   - Traefik will automatically detect and apply the configuration
+#   - No manual Traefik configuration needed
+# =============================================================================
+
+http:
+  routers:
+{% for repo in nexus_repositories | default([]) %}
+{% if repo.enabled | default(false) and repo.traefik_subdomain_prefix | default('') | length > 0 %}
+    nexus-{{ repo.name }}-router:
+      entryPoints:
+        - websecure
+      service: nexus-{{ repo.name }}-service
+      rule: "Host(`{{ repo.traefik_subdomain_prefix }}.{{ main_domain }}`)"
+      tls:
+        certResolver: default
+      priority: 10
+{% endif %}
+{% endfor %}
+
+  services:
+{% for repo in nexus_repositories | default([]) %}
+{% if repo.enabled | default(false) and repo.traefik_subdomain_prefix | default('') | length > 0 %}
+    nexus-{{ repo.name }}-service:
+      loadBalancer:
+        servers:
+          - url: "http://{{ nexus_listen_address }}:{{ nexus_port }}"
+        healthCheck:
+          path: "//service/rest/v1/status"
+          interval: 30s
+          timeout: 10s
+        passHostHeader: true
+        serversTransport: nexus-transport
+{% endif %}
+{% endfor %}
+
+  serversTransports:
+    nexus-transport:
+      insecureSkipVerify: true
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      maxVersion: VersionTLS13
+      cipherSuites:
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305

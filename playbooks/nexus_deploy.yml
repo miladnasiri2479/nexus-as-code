@@ -41,11 +41,11 @@
       tags: [minio, buckets]
 
     - role: nexus_install
-      when: nexus_enabled | default(true) and not nexus_docker_enabled | default(false)
+      when: nexus_enabled | default(true)
       tags: [nexus, install]
 
     - role: nexus_config
-      when: nexus_enabled | default(true) and not nexus_docker_enabled | default(false)
+      when: nexus_enabled | default(true)
       tags: [nexus, config]
 
     - role: nexus_blobstores
@@ -81,7 +81,7 @@
       ansible.builtin.debug:
         msg:
           - "Nexus Repository Manager deployed successfully"
-          - "URL: http://{{ nexus_fqdn }}:{{ nexus_port }}{{ nexus_context_path }}"
+          - "URL: http://{{ nexus_fqdn }}:{{ nexus_port }}/"
           - "Version: {{ nexus_version }}"
           - "Edition: {{ nexus_edition }}"
       when: nexus_enabled | default(true)

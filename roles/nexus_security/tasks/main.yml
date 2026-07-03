@@ -22,7 +22,7 @@
       - nexus_admin_password | default('') | length > 0
     fail_msg: >-
       [SECURITY] ERROR: Missing required variable 'nexus_admin_password'.
-      Set it in your inventory: nexus_admin_password: "{{ vault_nexus_admin_password }}"
+      Set it in your inventory: nexus_admin_password: "your-password"
   tags: [nexus, security, validate]
 
 - name: Security | Assert SSL settings when enabled
@@ -83,6 +83,7 @@
   diff: "{{ nexus_security_diff }}"
   no_log: "{{ nexus_no_log }}"
   check_mode: false
+  when: nexus_anonymous_access_enabled | default(false)
   tags: [nexus, security, anonymous]
 
 - name: Security | Display anonymous access result

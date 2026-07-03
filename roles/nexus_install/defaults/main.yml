@@ -1,15 +1,10 @@
 ---
 nexus_install_method: binary
 nexus_version: "3.72.0"
-nexus_edition: oss
-nexus_download_base_url: "https://download.sonatype.com/nexus/3"
-nexus_download_url: ""
+# Download URL: https://cdn.download.sonatype.com/repository/downloads-prod-group/3/nexus-<VERSION>-04-unix.tar.gz
 nexus_download_checksum: ""
 nexus_download_checksum_algorithm: sha256
 nexus_download_timeout: 600
-nexus_download_proxy: ""
-nexus_download_proxy_user: ""
-nexus_download_proxy_password: ""
 nexus_service_name: nexus
 nexus_service_state: started
 nexus_service_enabled: true
@@ -19,11 +14,10 @@ nexus_service_timeout_start: 300
 nexus_service_timeout_stop: 60
 nexus_port: 8081
 nexus_listen_address: "0.0.0.0"
-nexus_context_path: "/"
 nexus_https_enabled: false
 nexus_https_port: 8443
 nexus_install_dir: /opt/sonatype
-nexus_app_dir: "{{ nexus_install_dir }}/nexus-{{ nexus_edition }}-{{ nexus_version }}"
+nexus_app_dir: "{{ nexus_install_dir }}/nexus-{{ nexus_version }}-04"
 nexus_current_link: "{{ nexus_install_dir }}/current"
 nexus_data_dir: /var/nexus/data
 nexus_temp_dir: /var/nexus/tmp

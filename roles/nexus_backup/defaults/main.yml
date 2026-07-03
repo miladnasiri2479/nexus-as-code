@@ -28,4 +28,3 @@ nexus_runas_group: nexus
 nexus_service_name: nexus
 nexus_port: 8081
 nexus_listen_address: "0.0.0.0"
-nexus_context_path: "/"

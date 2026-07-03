@@ -14,13 +14,11 @@ nexus_admin_password: ""
 nexus_validate_certs: true
 nexus_port: 8081
 nexus_listen_address: "0.0.0.0"
-nexus_context_path: "/"
 nexus_api_scheme: http
 nexus_api_version: v1
 nexus_api_timeout: 30
 nexus_api_retries: 3
 nexus_api_retry_delay: 5
-nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
 nexus_roles_url: "{{ nexus_api_base_url }}/security/roles"
 nexus_roles_run_once: false
 nexus_roles_delegate_to: ""

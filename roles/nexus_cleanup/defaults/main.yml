@@ -29,7 +29,6 @@ nexus_admin_password: ""
 nexus_validate_certs: true
 nexus_port: 8081
 nexus_listen_address: "0.0.0.0"
-nexus_context_path: "/"
 nexus_api_scheme: http
 nexus_api_version: v1
 nexus_api_timeout: 30
@@ -38,7 +37,6 @@ nexus_api_retry_delay: 5
 
 # Computed URLs.
 # Type: string (derived)
-nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
 nexus_cleanup_list_url: "{{ nexus_api_base_url }}/cleanup-policies"
 nexus_cleanup_create_url: "{{ nexus_api_base_url }}/cleanup-policies"
 

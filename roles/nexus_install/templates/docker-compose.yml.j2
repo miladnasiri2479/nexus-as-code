@@ -1,5 +1,5 @@
 # =============================================================================
-# Nexus Repository Manager — Docker Compose
+# Docker Compose for Nexus with Traefik Labels
 # Managed by Ansible — DO NOT EDIT MANUALLY
 # Role: nexus_install
 # =============================================================================
@@ -10,15 +10,7 @@ services:
     container_name: "{{ nexus_docker_container_name }}"
     hostname: "{{ nexus_hostname | default(inventory_hostname) }}"
     restart: "{{ nexus_docker_restart_policy }}"
-
-    # ── Network ──
     network_mode: "{{ nexus_docker_network_mode }}"
-{% if nexus_docker_network_mode != 'host' %}
-    ports:
-{% for port in nexus_docker_ports %}
-      - "{{ port }}"
-{% endfor %}
-{% endif %}
 
     # ── Volumes ──
     volumes:
@@ -29,37 +21,25 @@ services:
     # ── Environment ──
     environment:
       INSTALL4J_ADD_VM_PARAMS: "{{ nexus_docker_install4j | default(nexus_jvm_memory ~ ' -Djava.util.prefs.userRoot=' ~ nexus_data_dir ~ '/data/java' ~ ' -Djava.io.tmpdir=' ~ nexus_temp_dir) }}"
+{% if nexus_docker_admin_password_enabled | default(false) %}
+      NEXUS_SECURITY_ADMIN_PASSWORD: "{{ nexus_admin_password }}"
+{% endif %}
 {% for key, value in nexus_docker_env.items() %}
       {{ key }}: "{{ value }}"
 {% endfor %}
-
-    # ── Ports (explicit, for documentation) ──
-    # Nexus UI/API:      {{ nexus_port }}:8081
-{% if nexus_https_enabled %}
-    # Nexus HTTPS:       {{ nexus_https_port }}:8443
-{% endif %}
 
     # ── Resource Limits ──
 {% if nexus_docker_memory_limit | default('') | length > 0 %}
     mem_limit: "{{ nexus_docker_memory_limit }}"
 {% endif %}
-{% if nexus_docker_memswap_limit | default('') | length > 0 %}
-    memswap_limit: "{{ nexus_docker_memswap_limit }}"
-{% endif %}
 {% if nexus_docker_cpus | default('') | length > 0 %}
     cpus: {{ nexus_docker_cpus }}
-{% endif %}
-{% if nexus_docker_cpu_shares | default(0) | int > 0 %}
-    cpu_shares: {{ nexus_docker_cpu_shares }}
-{% endif %}
-{% if nexus_docker_privileged | default(false) %}
-    privileged: true
 {% endif %}
 
     # ── Health Check ──
 {% if nexus_docker_healthcheck_enabled %}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081{{ nexus_api_health_path }}"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081{{ nexus_api_health_path | default('/service/rest/v1/status') }}"]
       interval: "{{ nexus_docker_healthcheck_interval }}s"
       timeout: "{{ nexus_docker_healthcheck_timeout }}s"
       retries: {{ nexus_docker_healthcheck_retries }}
@@ -73,8 +53,23 @@ services:
         max-size: "10m"
         max-file: "5"
 
-    # ── Labels ──
+{% if nexus_traefik_enabled | default(false) %}
+    # ── Traefik Labels ──
     labels:
-      com.nexus.managed-by: "ansible"
-      com.nexus.version: "{{ nexus_version }}"
-      com.nexus.edition: "{{ nexus_edition }}"
+      - "traefik.enable=true"
+      - "traefik.http.routers.nexus.entrypoints=websecure"
+      - "traefik.http.routers.nexus.tls.certResolver=default"
+      - "traefik.http.services.nexus.loadbalancer.server.port=8081"
+      - "traefik.http.services.nexus.loadbalancer.healthcheck.path=//service/rest/v1/status"
+      - "traefik.http.services.nexus.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.nexus.loadbalancer.healthcheck.timeout=10s"
+{% for repo in nexus_repositories | default([]) %}
+{% if repo.enabled | default(false) and repo.traefik_subdomain_prefix | default('') | length > 0 %}
+      - "traefik.http.routers.{{ repo.name }}.rule=Host(`{{ repo.traefik_subdomain_prefix }}.{{ main_domain }}`)"
+      - "traefik.http.routers.{{ repo.name }}.entrypoints=websecure"
+      - "traefik.http.routers.{{ repo.name }}.tls.certResolver=default"
+      - "traefik.http.services.{{ repo.name }}.loadbalancer.server.port=8081"
+      - "traefik.http.services.{{ repo.name }}.loadbalancer.healthcheck.path=//service/rest/v1/status"
+{% endif %}
+{% endfor %}
+{% endif %}

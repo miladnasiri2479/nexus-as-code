@@ -7,7 +7,7 @@ application-port={{ nexus_port }}
 application-ssl-port={{ nexus_https_port }}
 {% endif %}
 nexus.scripts.allowCreation={{ nexus_enable_nexus_orient | lower }}
-nexus.webapp.context-path={{ nexus_context_path }}
+nexus.webapp.context-path=/
 nexus.data={{ nexus_data_dir }}
 nexus.tmpdir={{ nexus_temp_dir }}
 nexus.orient.workspace={{ nexus_work_dir }}

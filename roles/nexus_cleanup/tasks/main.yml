@@ -48,11 +48,19 @@
   delegate_to: "{{ nexus_cleanup_delegate_to | default(omit) }}"
   run_once: "{{ nexus_cleanup_run_once }}"
   changed_when: false
+  failed_when: false
+  tags: [nexus, cleanup, query]
+
+- name: Cleanup | Skip if API not available
+  ansible.builtin.debug:
+    msg: "[CLEANUP] API not available (HTTP {{ _cleanup_list.status | default('N/A') }}). Skipping cleanup policy configuration."
+  when: _cleanup_list.status | default(200) != 200
   tags: [nexus, cleanup, query]
 
 - name: Cleanup | Set existing policies fact
   ansible.builtin.set_fact:
     _existing_cleanup: "{{ _cleanup_list.json | default([]) | map(attribute='name') | list }}"
+  when: _cleanup_list.status | default(200) == 200
   tags: [nexus, cleanup, query]
 
 - name: Cleanup | Create cleanup policies
@@ -171,7 +179,7 @@
   delegate_to: "{{ nexus_cleanup_delegate_to | default(omit) }}"
   run_once: "{{ nexus_cleanup_run_once }}"
   diff: "{{ nexus_cleanup_diff }}"
-  loop: "{{ _existing_cleanup }}"
+  loop: "{{ _existing_cleanup | default([]) }}"
   loop_control:
     label: "Delete: {{ item }}"
     pause: 0
@@ -185,6 +193,7 @@
     msg:
       - "[CLEANUP] Configuration Complete"
       - "  Defined: {{ nexus_cleanup_policies | length }}"
-      - "  Already existed: {{ _existing_cleanup | intersect(nexus_cleanup_policies | map(attribute='name') | list) | length }}"
-      - "  Created: {{ nexus_cleanup_policies | length - _existing_cleanup | intersect(nexus_cleanup_policies | map(attribute='name') | list) | length }}"
+      - "  Already existed: {{ (_existing_cleanup | default([])) | intersect(nexus_cleanup_policies | map(attribute='name') | list) | length }}"
+      - "  Created: {{ nexus_cleanup_policies | length - (_existing_cleanup | default([])) | intersect(nexus_cleanup_policies | map(attribute='name') | list) | length }}"
+  when: _cleanup_list.status | default(200) == 200
   tags: [nexus, cleanup, summary]

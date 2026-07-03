@@ -52,7 +52,6 @@ Complete reference for all configuration variables.
 | `nexus_service_enabled` | bool | `true` | Enable on boot |
 | `nexus_port` | int | `8081` | HTTP port |
 | `nexus_listen_address` | string | `0.0.0.0` | Bind address |
-| `nexus_context_path` | string | `/` | Web context path |
 
 ## JVM
 

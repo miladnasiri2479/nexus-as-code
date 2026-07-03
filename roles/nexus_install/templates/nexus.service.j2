@@ -11,7 +11,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=simple
 
 # User and group
 User={{ nexus_runas_user }}
@@ -21,11 +21,10 @@ Group={{ nexus_runas_group }}
 EnvironmentFile=/etc/default/nexus
 
 # Start / Stop commands
-ExecStart={{ nexus_current_link }}/bin/nexus start
+ExecStart={{ nexus_current_link }}/bin/nexus run
 ExecStop={{ nexus_current_link }}/bin/nexus stop
 
-# PID file (used by Type=forking)
-PIDFile={{ nexus_data_dir }}/nexus.pid
+# No PID file needed for Type=simple
 
 # Restart policy
 Restart={{ nexus_service_restart_policy }}

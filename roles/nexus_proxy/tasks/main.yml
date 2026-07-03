@@ -68,6 +68,39 @@
   notify: Restart nexus
   tags: [nexus, proxy, env]
 
+###############################################################################
+# TRAEFIK DYNAMIC CONFIGURATION
+###############################################################################
+
+- name: Proxy | Create Traefik dynamic config directory
+  ansible.builtin.file:
+    path: "{{ nexus_traefik_dynamic_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: nexus_traefik_enabled | default(false)
+  tags: [nexus, proxy, traefik]
+
+- name: Proxy | Render Traefik dynamic configuration
+  ansible.builtin.template:
+    src: traefik_dynamic.yml.j2
+    dest: "{{ nexus_traefik_dynamic_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: nexus_traefik_enabled | default(false)
+  tags: [nexus, proxy, traefik]
+
+- name: Proxy | Display Traefik summary
+  ansible.builtin.debug:
+    msg: >-
+      [TRAEFIK] Generated config for
+      {{ nexus_repositories | selectattr('enabled', 'defined') | selectattr('enabled', 'equalto', true) | selectattr('traefik_subdomain_prefix', 'defined') | selectattr('traefik_subdomain_prefix', 'ne', '') | list | length }}
+      repository(ies)
+  when: nexus_traefik_enabled | default(false)
+  tags: [nexus, proxy, traefik]
+
 - name: Proxy | Display summary
   ansible.builtin.debug:
     msg:
@@ -75,5 +108,6 @@
       - "  Enabled: {{ nexus_proxy_enabled }}"
       - "  HTTP: {{ nexus_http_proxy_host }}:{{ nexus_http_proxy_port }}"
       - "  HTTPS: {{ nexus_https_proxy_host }}:{{ nexus_https_proxy_port }}"
+      - "  Traefik: {{ nexus_traefik_enabled | default(false) }}"
   when: nexus_proxy_enabled
   tags: [nexus, proxy, summary]

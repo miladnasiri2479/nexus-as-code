@@ -14,27 +14,19 @@
   ansible.builtin.assert:
     that:
       - nexus_version | default('') | length > 0
-      - nexus_edition | default('') | length > 0
       - nexus_port | int > 0
     fail_msg: >-
-      MISSING_VARIABLE: nexus_version, nexus_edition, and nexus_port are required.
+      MISSING_VARIABLE: nexus_version and nexus_port are required.
       Check your group_vars/nexus.yml file.
   tags: [nexus, binary, validate]
 
 ###############################################################################
-# COMPUTE DOWNLOAD URL
+# DOWNLOAD URL
 ###############################################################################
-
-- name: Binary | Compute download URL
-  ansible.builtin.set_fact:
-    _nexus_download_url: >-
-      {{ nexus_download_url if nexus_download_url | default('') | length > 0
-         else (nexus_download_base_url ~ '/nexus-' ~ nexus_edition ~ '-' ~ nexus_version ~ '.tar.gz') }}
-  tags: [nexus, binary, url]
 
 - name: Binary | Display download URL
   ansible.builtin.debug:
-    var: _nexus_download_url
+    msg: "https://cdn.download.sonatype.com/repository/downloads-prod-group/3/nexus-{{ nexus_version }}-04-unix.tar.gz"
   tags: [nexus, binary, url]
 
 ###############################################################################
@@ -129,14 +121,10 @@
 
 - name: Binary | Download Nexus tarball
   ansible.builtin.get_url:
-    url: "{{ _nexus_download_url }}"
-    dest: "/tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz"
+    url: "https://cdn.download.sonatype.com/repository/downloads-prod-group/3/nexus-{{ nexus_version }}-04-unix.tar.gz"
+    dest: "/tmp/nexus-{{ nexus_version }}.tar.gz"
     mode: "0644"
     timeout: "{{ nexus_download_timeout }}"
-    use_proxy: "{{ nexus_download_proxy | default('') | length > 0 }}"
-    proxy: "{{ nexus_download_proxy | default(omit) }}"
-    proxy_username: "{{ nexus_download_proxy_user | default(omit) }}"
-    proxy_password: "{{ nexus_download_proxy_password | default(omit) }}"
   when: _nexus_needs_install | bool
   register: _nexus_download_result
   tags: [nexus, binary, download]
@@ -145,7 +133,7 @@
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      echo "{{ nexus_download_checksum }}  /tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz" \
+      echo "{{ nexus_download_checksum }}  /tmp/nexus-{{ nexus_version }}.tar.gz" \
         | {{ nexus_download_checksum_algorithm }}sum -c -
     executable: /bin/bash
   changed_when: false
@@ -169,7 +157,7 @@
 
 - name: Binary | Extract Nexus tarball
   ansible.builtin.unarchive:
-    src: "/tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz"
+    src: "/tmp/nexus-{{ nexus_version }}.tar.gz"
     dest: "{{ nexus_install_dir }}"
     remote_src: true
     creates: "{{ nexus_app_dir }}"
@@ -178,7 +166,7 @@
 
 - name: Binary | Remove downloaded tarball
   ansible.builtin.file:
-    path: "/tmp/nexus-{{ nexus_edition }}-{{ nexus_version }}.tar.gz"
+    path: "/tmp/nexus-{{ nexus_version }}.tar.gz"
     state: absent
   tags: [nexus, binary, cleanup]
 
@@ -194,15 +182,28 @@
     force: true
   tags: [nexus, binary, symlink]
 
+- name: Binary | Ensure data subdirectories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ nexus_runas_user }}"
+    group: "{{ nexus_runas_group }}"
+    mode: "0755"
+  loop:
+    - "{{ nexus_data_dir }}"
+    - "{{ nexus_temp_dir }}"
+    - "{{ nexus_work_dir }}"
+    - "{{ nexus_log_dir }}"
+  tags: [nexus, binary, dirs]
+
 - name: Binary | Set ownership on directories
   ansible.builtin.file:
     path: "{{ item }}"
     owner: "{{ nexus_runas_user }}"
     group: "{{ nexus_runas_group }}"
-    recurse: false
+    recurse: true
   loop:
     - "{{ nexus_install_dir }}"
-    - "{{ nexus_app_dir }}"
     - "{{ nexus_data_dir }}"
     - "{{ nexus_temp_dir }}"
     - "{{ nexus_work_dir }}"
@@ -257,7 +258,7 @@
 
 - name: Binary | Wait for Nexus API
   ansible.builtin.uri:
-    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}{{ nexus_api_health_path }}"
+    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_api_health_path }}"
     method: GET
     timeout: "{{ nexus_api_timeout }}"
     status_code: "{{ nexus_api_expected_status }}"

@@ -6,7 +6,6 @@ nexus_restore_post_check: true
 nexus_data_dir: /var/nexus/data
 nexus_backup_dir: /var/nexus/backup
 nexus_port: 8081
-nexus_context_path: "/"
 nexus_runas_user: nexus
 nexus_runas_group: nexus
 nexus_service_name: nexus

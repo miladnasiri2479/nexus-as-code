@@ -1,0 +1,90 @@
+---
+###############################################################################
+# traefik_setup — tasks/main.yml
+###############################################################################
+
+- name: Traefik | Display role info
+  ansible.builtin.debug:
+    msg: "Installing Traefik {{ traefik_version }}"
+  when: traefik_enabled
+  tags: [traefik]
+
+- name: Traefik | Create Traefik directory
+  ansible.builtin.file:
+    path: /etc/traefik
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: traefik_enabled
+  tags: [traefik, dirs]
+
+- name: Traefik | Create dynamic config directory
+  ansible.builtin.file:
+    path: /etc/traefik/dynamic
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: traefik_enabled
+  tags: [traefik, dirs]
+
+- name: Traefik | Pull Docker image
+  community.docker.docker_image:
+    name: "{{ traefik_docker_image }}"
+    source: pull
+  when: traefik_enabled
+  tags: [traefik, pull]
+
+- name: Traefik | Create Docker network
+  community.docker.docker_network:
+    name: "{{ traefik_network }}"
+    state: present
+  when: traefik_enabled
+  tags: [traefik, network]
+
+- name: Traefik | Create acme.json
+  ansible.builtin.file:
+    path: /etc/traefik/acme.json
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+  when: traefik_enabled
+  tags: [traefik, config]
+
+- name: Traefik | Start Traefik container
+  community.docker.docker_container:
+    name: "{{ traefik_container_name }}"
+    image: "{{ traefik_docker_image }}"
+    state: started
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ traefik_network }}"
+    ports:
+      - "{{ traefik_http_port }}:80"
+      - "{{ traefik_https_port }}:443"
+      - "{{ traefik_dashboard_port }}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/traefik:/etc/traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.{{ main_domain }}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certResolver=default"
+    env: "{{ traefik_env | default({}) }}"
+  when: traefik_enabled
+  tags: [traefik, container]
+
+- name: Traefik | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "[TRAEFIK] Configuration Complete"
+      - "  Version: {{ traefik_version }}"
+      - "  HTTP: {{ traefik_http_port }}"
+      - "  HTTPS: {{ traefik_https_port }}"
+      - "  Dashboard: {{ traefik_dashboard_port }}"
+  when: traefik_enabled
+  tags: [traefik, summary]
