@@ -38,12 +38,13 @@
           Are you SURE you want to destroy Nexus on {{ inventory_hostname }}?
           Type 'YES DESTROY' to confirm (anything else will abort):
       register: destroy_confirmation
+      when: not nexus_destroy_confirm | default(false)
       tags: [nexus, destroy]
 
     - name: Validate confirmation
       ansible.builtin.assert:
         that:
-          - destroy_confirmation.user_input | trim | upper == 'YES DESTROY'
+          - nexus_destroy_confirm | default(false) or (destroy_confirmation.user_input | default('') | trim | upper == 'YES DESTROY')
         fail_msg: |
           ABORTED: Destruction cancelled.
           You did not type 'YES DESTROY'.

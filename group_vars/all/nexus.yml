@@ -94,12 +94,6 @@ nexus_port: 8081
 # Type: string
 nexus_listen_address: "0.0.0.0"
 
-# Web application context path.
-#   "/" = root
-#   "/nexus" = all URLs prefixed with /nexus
-# Type: string
-nexus_context_path: "/"
-
 
 ###############################################################################
 # SECTION 3 — JVM

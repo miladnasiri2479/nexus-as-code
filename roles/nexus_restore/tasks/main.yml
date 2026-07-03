@@ -150,7 +150,7 @@
 
 - name: Restore | Wait for Nexus API
   ansible.builtin.uri:
-    url: "http://localhost:{{ nexus_port }}{{ nexus_context_path }}service/rest/v1/status"
+    url: "http://localhost:{{ nexus_port }}//service/rest/v1/status"
     method: GET
     status_code: 200
   register: _restore_health

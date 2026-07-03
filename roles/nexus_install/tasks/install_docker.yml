@@ -178,7 +178,7 @@
 ###############################################################################
 
 - name: Docker | Start Nexus container
-  community.docker.docker_compose:
+  community.docker.docker_compose_v2:
     project_src: "{{ nexus_docker_compose_dir }}"
     project_name: "{{ nexus_docker_compose_project }}"
     files:
@@ -198,7 +198,7 @@
 
 - name: Docker | Wait for Nexus API
   ansible.builtin.uri:
-    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}{{ nexus_api_health_path }}"
+    url: "http://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_api_health_path }}"
     method: GET
     timeout: "{{ nexus_api_timeout }}"
     status_code: "{{ nexus_api_expected_status }}"

@@ -19,14 +19,12 @@ nexus_admin_password: ""
 nexus_validate_certs: true
 nexus_port: 8081
 nexus_listen_address: "0.0.0.0"
-nexus_context_path: "/"
 nexus_api_scheme: http
 nexus_api_version: v1
 nexus_api_timeout: 30
 nexus_api_retries: 3
 nexus_api_retry_delay: 5
 
-nexus_api_base_url: "{{ nexus_api_scheme }}://{{ nexus_listen_address }}:{{ nexus_port }}{{ nexus_context_path }}service/rest/{{ nexus_api_version }}"
 nexus_proxy_url: "{{ nexus_api_base_url }}/security/proxy"
 nexus_service_name: nexus
 
@@ -37,3 +35,43 @@ nexus_no_log: true
 nexus_http_proxy_env: ""
 nexus_https_proxy_env: ""
 nexus_no_proxy_env: ""
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TRAEFIK DYNAMIC CONFIGURATION
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Enable Traefik dynamic configuration generation.
+# Type: bool
+nexus_traefik_enabled: false
+
+# Traefik dynamic configuration file path.
+# Type: string
+nexus_traefik_dynamic_config_dir: "/etc/traefik/dynamic"
+
+# Traefik dynamic configuration file name.
+# Type: string
+nexus_traefik_dynamic_config_file: "nexus.yml"
+
+# Computed Traefik dynamic config path.
+# Type: string (derived)
+nexus_traefik_dynamic_config_path: "{{ nexus_traefik_dynamic_config_dir }}/{{ nexus_traefik_dynamic_config_file }}"
+
+# Primary domain for Traefik routing.
+# Used as: {{ traefik_subdomain_prefix }}.{{ main_domain }}
+# Type: string
+main_domain: example.com
+
+# Nexus repository definitions for Traefik.
+# Each entry with enabled=true and traefik_subdomain_prefix defined
+# will generate a Traefik router and service.
+# Type: list[dict]
+nexus_repositories: []
+  # - name: docker
+  #   enabled: true
+  #   traefik_subdomain_prefix: docker
+  # - name: helm
+  #   enabled: true
+  #   traefik_subdomain_prefix: helm
+  # - name: npm
+  #   enabled: false
+  #   traefik_subdomain_prefix: npm

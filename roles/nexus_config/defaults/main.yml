@@ -3,7 +3,6 @@ nexus_listen_address: "0.0.0.0"
 nexus_port: 8081
 nexus_https_enabled: false
 nexus_https_port: 8443
-nexus_context_path: "/"
 nexus_data_dir: /var/nexus/data
 nexus_temp_dir: /var/nexus/tmp
 nexus_work_dir: /var/nexus/scratch

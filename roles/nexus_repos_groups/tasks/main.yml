@@ -80,7 +80,7 @@
 
 - name: Repo Groups | Set existing groups fact
   ansible.builtin.set_fact:
-    _existing_groups: "{{ _group_list.json | default([]) | map(attribute='name') | list }}"
+    _existing_groups: "{{ _group_list.json | default([]) | selectattr('type', 'equalto', 'group') | map(attribute='name') | list }}"
   tags: [nexus, repo-groups, query]
 
 - name: Repo Groups | Display existing groups
@@ -94,7 +94,7 @@
 
 - name: Repo Groups | Create repository groups
   ansible.builtin.uri:
-    url: "{{ nexus_repo_groups_create_url }}/{{ item.format }}"
+    url: "{{ nexus_repo_groups_create_url }}/{{ item.format }}/group"
     method: POST
     body_format: json
     body: "{{ item }}"
@@ -129,7 +129,7 @@
 
 - name: Repo Groups | Update existing groups
   ansible.builtin.uri:
-    url: "{{ nexus_repo_groups_create_url }}/{{ item.format }}/{{ item.name }}"
+    url: "{{ nexus_repo_groups_create_url }}/{{ item.name }}"
     method: PUT
     body_format: json
     body: "{{ item }}"

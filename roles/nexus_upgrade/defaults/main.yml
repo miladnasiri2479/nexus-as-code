@@ -7,7 +7,6 @@ nexus_upgrade_verify_version: true
 nexus_upgrade_timeout: 600
 nexus_current_link: /opt/sonatype/current
 nexus_port: 8081
-nexus_context_path: "/"
 nexus_service_name: nexus
 nexus_service_state: started
 nexus_api_retries: 30
